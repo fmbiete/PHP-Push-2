@@ -46,7 +46,7 @@
 include_once('lib/default/diffbackend/diffbackend.php');
 include_once('include/mimeDecode.php');
 require_once('include/z_RFC822.php');
-
+require_once('include/class.html2text.inc');
 
 class BackendIMAP extends BackendDiff {
     protected $wasteID;
@@ -59,6 +59,7 @@ class BackendIMAP extends BackendDiff {
     protected $serverdelimiter;
     protected $sinkfolders;
     protected $sinkstates;
+    protected $excludedFolders;
 
     /**----------------------------------------------------------------------------------------------------------
      * default backend methods
@@ -79,6 +80,11 @@ class BackendIMAP extends BackendDiff {
         $this->wasteID = false;
         $this->sentID = false;
         $this->server = "{" . IMAP_SERVER . ":" . IMAP_PORT . "/imap" . IMAP_OPTIONS . "}";
+        
+        $this->excludedFolders = array();
+        if( defined(IMAP_EXCLUDED_FOLDERS) ) {
+            $this->excludedFolders = explode("|", IMAP_EXCLUDED_FOLDERS);
+        }
 
         if (!function_exists("imap_open"))
             throw new FatalException("BackendIMAP(): php-imap module is not installed", 0, null, LOGLEVEL_FATAL);
@@ -88,7 +94,7 @@ class BackendIMAP extends BackendDiff {
         $this->mboxFolder = "";
 
         if ($this->mbox) {
-            ZLog::Write(LOGLEVEL_INFO, sprintf("BackendIMAP->Logon(): User '%s' is authenticated on IMAP",$username));
+            ZLog::Write(LOGLEVEL_DEBUG, sprintf("BackendIMAP->Logon(): User '%s' is authenticated on IMAP",$username));
             $this->username = $username;
             $this->domain = $domain;
             // set serverdelimiter
@@ -669,21 +675,32 @@ class BackendIMAP extends BackendDiff {
             $list = array_reverse($list);
 
             foreach ($list as $val) {
-                $box = array();
-                // cut off serverstring
-                $imapid = substr($val->name, strlen($this->server));
-                $box["id"] = $this->convertImapId($imapid);
+                // don't return the excluded folders
+                $notExcluded = true;
+                for ($i = 0; $notExcluded && $i < count($this->excludedFolders); $i++) {
+                    if (strpos(strtolower($val->name), strtolower($this->excludedFolders[$i])) !== false) {
+                        $notExcluded = false;
+                        ZLog::Write(LOGLEVEL_DEBUG, "Pattern: <" . $this->excludedFolders[$i] . "> Excluded Folder: " . $val->name);
+                    }
+                }
 
-                $fhir = explode($val->delimiter, $imapid);
-                if (count($fhir) > 1) {
-                    $this->getModAndParentNames($fhir, $box["mod"], $imapparent);
-                    $box["parent"] = $this->convertImapId($imapparent);
+                if ($notExcluded) {
+                    $box = array();
+                    // cut off serverstring
+                    $imapid = substr($val->name, strlen($this->server));
+                    $box["id"] = $this->convertImapId($imapid);
+
+                    $fhir = explode($val->delimiter, $imapid);
+                    if (count($fhir) > 1) {
+                        $this->getModAndParentNames($fhir, $box["mod"], $imapparent);
+                        $box["parent"] = $this->convertImapId($imapparent);
+                    }
+                    else {
+                        $box["mod"] = $imapid;
+                        $box["parent"] = "0";
+                    }
+                    $folders[]=$box;
                 }
-                else {
-                    $box["mod"] = $imapid;
-                    $box["parent"] = "0";
-                }
-                $folders[]=$box;
             }
         }
         else {
@@ -946,20 +963,53 @@ class BackendIMAP extends BackendDiff {
 
             $output = new SyncMail();
 
-            $body = $this->getBody($message);
-            $output->bodysize = strlen($body);
+            if (Request::GetProtocolVersion() >= 12.0) {
+                ZLog::Write(LOGLEVEL_DEBUG, "AirSyncBaseBody");
+                $output->asbody = new SyncBaseBody();
 
-            // truncate body, if requested
-            if(strlen($body) > $truncsize) {
-                $body = Utils::Utf8_truncate($body, $truncsize);
-                $output->bodytruncated = 1;
-            } else {
-                $body = $body;
-                $output->bodytruncated = 0;
+                $output->nativebodytype = SYNC_BODYPREFERENCE_PLAIN;
+                $output->asbody->type = "text";
+
+                $body = $this->getBody($message);
+                $body = str_replace("\n","\r\n", str_replace("\r","",$body));              
+                
+                // truncate body, if requested
+                if(strlen($body) > $truncsize) {
+                    $body = Utils::Utf8_truncate($body, $truncsize);
+                    $output->asbody->truncated = 1;
+                }
+                else {
+                    $output->asbody->truncated = 0;
+                }
+                $output->asbody->data = $body;
+                $output->asbody->estimatedDataSize = strlen($body);
+
+                $bpo = $contentparameters->BodyPreference(SYNC_BODYPREFERENCE_PLAIN);
+                if (Request::GetProtocolVersion() >= 14.0 && $bpo->GetPreview()) {
+                    
+                    $output->asbody->preview = Utils::Utf8_truncate($body, $bpo->GetPreview());
+                }
+
+                $output->flag = new SyncMailFlags();
+                $output->flag->flagstatus = 0;
+                
+                $output->flag->internetcpid = 65001;
+                $output->contentclass = "urn:content-classes:message";
             }
-            $body = str_replace("\n","\r\n", str_replace("\r","",$body));
+            else {
+                $body = str_replace("\n","\r\n", str_replace("\r","",$body));
+                $output->bodysize = strlen($body);
 
-            $output->body = $body;
+                // truncate body, if requested
+                if(strlen($body) > $truncsize) {
+                    $body = Utils::Utf8_truncate($body, $truncsize);
+                    $output->bodytruncated = 1;
+                } else {
+                    $output->bodytruncated = 0;
+                }                
+
+                $output->body = $body;
+            }
             $output->datereceived = isset($message->headers["date"]) ? $this->cleanupDate($message->headers["date"]) : null;
             $output->messageclass = "IPM.Note";
             $output->subject = isset($message->headers["subject"]) ? $message->headers["subject"] : "";
@@ -1027,14 +1077,6 @@ class BackendIMAP extends BackendDiff {
                     if ((isset($part->disposition) && ($part->disposition == "attachment" || $part->disposition == "inline")) ||
                         (isset($part->ctype_primary) && $part->ctype_primary != "text")) {
 
-                        if (!isset($output->attachments) || !is_array($output->attachments))
-                            $output->attachments = array();
-
-                        $attachment = new SyncAttachment();
-
-                        if (isset($part->body))
-                            $attachment->attsize = strlen($part->body);
-
                         if(isset($part->d_parameters['filename']))
                             $attname = $part->d_parameters['filename'];
                         else if(isset($part->ctype_parameters['name']))
@@ -1043,13 +1085,40 @@ class BackendIMAP extends BackendDiff {
                             $attname = $part->headers['content-description'];
                         else $attname = "unknown attachment";
 
-                        $attachment->displayname = $attname;
-                        $attachment->attname = $folderid . ":" . $id . ":" . $i;
-                        $attachment->attmethod = 1;
-                        $attachment->attoid = isset($part->headers['content-id']) ? $part->headers['content-id'] : "";
-                        array_push($output->attachments, $attachment);
-                    }
+                        if (Request::GetProtocolVersion() >= 12.0) {
+                            if (!isset($output->asattachments) || !is_array($output->asattachments))
+                                $output->asattachments = array();
 
+                            $attachment = new SyncBaseAttachment();
+
+                            if (isset($part->body))
+                                $attachment->estimatedDataSize = strlen($part->body);
+
+                            $attachment->displayname = $attname;
+                            $attachment->filereference = $folderid . ":" . $id . ":" . $i;
+                            $attachment->method = 1; //Normal attachment
+                            $attachment->contentid = isset($part->headers['content-id']) ? $part->headers['content-id'] : "";
+                            $attachment->isinline = 0;
+
+                            array_push($output->asattachments, $attachment);
+                        }
+                        else {
+                            if (!isset($output->attachments) || !is_array($output->attachments))
+                                $output->attachments = array();
+
+                            $attachment = new SyncAttachment();
+
+                            if (isset($part->body))
+                                $attachment->attsize = strlen($part->body);
+
+                            $attachment->displayname = $attname;
+                            $attachment->attname = $folderid . ":" . $id . ":" . $i;
+                            $attachment->attmethod = 1;
+                            $attachment->attoid = isset($part->headers['content-id']) ? $part->headers['content-id'] : "";
+
+                            array_push($output->attachments, $attachment);
+                        }                        
+                    }
                 }
             }
             // unset mimedecoder & mail
@@ -1356,10 +1425,17 @@ class BackendIMAP extends BackendDiff {
 
         if($body === "") {
             $this->getBodyRecursive($message, "html", $body);
-            // remove css-style tags
-            $body = preg_replace("/<style.*?<\/style>/is", "", $body);
-            // remove all other html
-            $body = strip_tags($body);
+            if (class_exists('html2text')) {
+                // convert a html message into plaintext keeping some format
+                $h2t = new html2text($body,false);
+                $body = $h2t->get_text();
+                unset($h2t);
+            } else {
+                // remove css-style tags
+                $body = preg_replace("/<style.*?<\/style>/is", "", $body);
+                // remove all other html
+                $body = strip_tags($body);
+            }
         }
 
         return $body;
@@ -1598,6 +1674,15 @@ class BackendIMAP extends BackendDiff {
         return $receiveddate;
     }
 
-}
+    /**
+     * Indicates which AS version is supported by the backend.
+     *
+     * @access public
+     * @return string       AS version constant
+     */
+    public function GetSupportedASVersion() {
+        return ZPush::ASV_14;
+    }
+};
 
 ?>
