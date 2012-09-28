@@ -1477,7 +1477,7 @@ class BackendIMAP extends BackendDiff {
         $type = isset($message->ctype_primary) ? $message->ctype_primary : "text";
         $subtype = isset($message->ctype_secondary) ? $message->ctype_secondary : "plain";
         ZLog::Write(LOGLEVEL_DEBUG, "BodyType: $type - $subtype");
-
+//$message->content_type
 /*
         ZLog::Write(LOGLEVEL_DEBUG, "BodyType: Default PlainText");
         $output->nativebodytype = SYNC_BODYPREFERENCE_PLAIN;
