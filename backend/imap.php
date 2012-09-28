@@ -964,27 +964,28 @@ class BackendIMAP extends BackendDiff {
             $output = new SyncMail();
 
             if (Request::GetProtocolVersion() >= 12.0) {
-                ZLog::Write(LOGLEVEL_DEBUG, "AirSyncBaseBody");
                 $output->asbody = new SyncBaseBody();
-
-                $output->nativebodytype = SYNC_BODYPREFERENCE_PLAIN;
-                $output->asbody->type = "text";
-
-                $body = $this->getBody($message);
-                $body = str_replace("\n","\r\n", str_replace("\r","",$body));              
                 
-                // truncate body, if requested
-                if(strlen($body) > $truncsize) {
-                    $body = Utils::Utf8_truncate($body, $truncsize);
-                    $output->asbody->truncated = 1;
-                }
-                else {
-                    $output->asbody->truncated = 0;
+                $body = $this->getBody($message);
+                $body = str_replace("\n","\r\n", str_replace("\r","",$body));
+                
+                $this->getBodyType($body, $output);
+                               
+                // truncate only if the body is plaintext, if we truncate a html message we could end with a malformed code
+                if ($output->nativebodytype == SYNC_BODYPREFERENCE_PLAIN) {
+                    // truncate body, if requested
+                    if(strlen($body) > $truncsize) {
+                        $body = Utils::Utf8_truncate($body, $truncsize);
+                        $output->asbody->truncated = 1;
+                    }
+                    else {
+                        $output->asbody->truncated = 0;
+                    }
                 }
                 $output->asbody->data = $body;
                 $output->asbody->estimatedDataSize = strlen($body);
-
-                $bpo = $contentparameters->BodyPreference(SYNC_BODYPREFERENCE_PLAIN);
+                
+                $bpo = $contentparameters->BodyPreference($output->nativebodytype);
                 if (Request::GetProtocolVersion() >= 14.0 && $bpo->GetPreview()) {
                     
                     $output->asbody->preview = Utils::Utf8_truncate($body, $bpo->GetPreview());
@@ -1425,17 +1426,6 @@ class BackendIMAP extends BackendDiff {
 
         if($body === "") {
             $this->getBodyRecursive($message, "html", $body);
-            if (class_exists('html2text')) {
-                // convert a html message into plaintext keeping some format
-                $h2t = new html2text($body,false);
-                $body = $h2t->get_text();
-                unset($h2t);
-            } else {
-                // remove css-style tags
-                $body = preg_replace("/<style.*?<\/style>/is", "", $body);
-                // remove all other html
-                $body = strip_tags($body);
-            }
         }
 
         return $body;
@@ -1463,6 +1453,33 @@ class BackendIMAP extends BackendDiff {
                     $this->getBodyRecursive($part, $subtype, $body);
                 }
             }
+        }
+    }
+    
+    /**
+    * Get the body type for a ASV_12+ message
+    *
+     * @param string        $message        message subtype
+     * @param string        &$output        output reference
+     *
+     * @access protected
+     * @return
+     */
+    protected function getBodyType($message, &$output) {
+        $type = isset($message->ctype_primary) ? $message->ctype_primary : "text";
+        $subtype = isset($message->ctype_secondary) ? $message->ctype_secondary : "plain";
+        
+        $output->nativebodytype = SYNC_BODYPREFERENCE_PLAIN;
+        $output->asbody->type = $type;
+        
+        if ($type == "text" && $subtype == "html") {
+            $output->nativebodytype = SYNC_BODYPREFERENCE_HTML;
+            $output->asbody->type = $subtype;
+        }
+        
+        if ($type == "multipart") {
+            $output->nativebodytype = SYNC_BODYPREFERENCE_MIME;
+            $output->asbody->type = $type;
         }
     }
 
