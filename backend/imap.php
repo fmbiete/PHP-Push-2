@@ -992,7 +992,15 @@ class BackendIMAP extends BackendDiff {
                 }
 
                 $output->flag = new SyncMailFlags();
-                $output->flag->flagstatus = 0;
+                if (!empty($message->flag) && isset($message->flag->flagstatus)) {
+                    $output->flag->flagstatus = $message->flag->flagstatus;
+                    $output->flag->flagtype = $message->flag->flagtype;
+//flagstatus 0: clear, 1: complete, 2: active
+//flagtype: for follow up
+                }
+                else {
+                    $output->flag->flagstatus = 0;
+                }        
                 
                 $output->flag->internetcpid = 65001;
                 $output->contentclass = "urn:content-classes:message";
@@ -1468,18 +1476,38 @@ class BackendIMAP extends BackendDiff {
     protected function getBodyType($message, &$output) {
         $type = isset($message->ctype_primary) ? $message->ctype_primary : "text";
         $subtype = isset($message->ctype_secondary) ? $message->ctype_secondary : "plain";
-        
+        ZLog::Write(LOGLEVEL_DEBUG, "BodyType: $type - $subtype");
+
+/*
+        ZLog::Write(LOGLEVEL_DEBUG, "BodyType: Default PlainText");
         $output->nativebodytype = SYNC_BODYPREFERENCE_PLAIN;
         $output->asbody->type = $type;
         
         if ($type == "text" && $subtype == "html") {
+            ZLog::Write(LOGLEVEL_DEBUG, "BodyType: HTML");
             $output->nativebodytype = SYNC_BODYPREFERENCE_HTML;
             $output->asbody->type = $subtype;
         }
         
         if ($type == "multipart") {
+            ZLog::Write(LOGLEVEL_DEBUG, "BodyType: MIME");
             $output->nativebodytype = SYNC_BODYPREFERENCE_MIME;
             $output->asbody->type = $type;
+        }
+*/
+$this->getBodyRecursive($message, "html", $body);
+ZLog::Write(LOGLEVEL_DEBUG, "Body: " . $body);
+        $this->getBodyRecursive($message, "plain", $body);
+
+        if($body === "") {
+            ZLog::Write(LOGLEVEL_DEBUG, "BodyType: HTML");
+            $output->nativebodytype = SYNC_BODYPREFERENCE_HTML;
+            $output->asbody->type = "html";
+        }
+        else {
+            ZLog::Write(LOGLEVEL_DEBUG, "BodyType: Default PlainText");
+            $output->nativebodytype = SYNC_BODYPREFERENCE_PLAIN;
+            $output->asbody->type = "text";
         }
     }
 
