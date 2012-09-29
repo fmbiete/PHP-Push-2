@@ -567,6 +567,8 @@ class BackendIMAP extends BackendDiff {
         $attachment->data = StringStreamWrapper::Open($message->parts[$part]->body);
         if (isset($message->parts[$part]->ctype_primary) && isset($message->parts[$part]->ctype_secondary))
             $attachment->contenttype = $message->parts[$part]->ctype_primary .'/'.$message->parts[$part]->ctype_secondary;
+            
+        ZLog::Write(LOGLEVEL_DEBUG, sprintf("BackendIMAP->GetAttachmentData contenttype %s", $attachment->contenttype));
 
         return $attachment;
     }
@@ -965,38 +967,40 @@ class BackendIMAP extends BackendDiff {
 
             if (Request::GetProtocolVersion() >= 12.0) {
                 $output->asbody = new SyncBaseBody();
-                
-                $body = $this->getBody($message);
-                $body = str_replace("\n","\r\n", str_replace("\r","",$body));
-                
-                $this->getBodyType($body, $output);
-                               
+                $output->asbody->truncated = 0;
+
+                $this->getBodyType($message, $output);
+
                 // truncate only if the body is plaintext, if we truncate a html message we could end with a malformed code
-                if ($output->nativebodytype == SYNC_BODYPREFERENCE_PLAIN) {
+                if ($output->asbody->type == SYNC_BODYPREFERENCE_PLAIN) {
+                    $body = $this->getBody($message);
+                    $body = str_replace("\n","\r\n", str_replace("\r","",$body));
+
                     // truncate body, if requested
                     if(strlen($body) > $truncsize) {
                         $body = Utils::Utf8_truncate($body, $truncsize);
                         $output->asbody->truncated = 1;
                     }
-                    else {
-                        $output->asbody->truncated = 0;
-                    }
+                    
+                    $output->asbody->data = $body;
                 }
-                $output->asbody->data = $body;
-                $output->asbody->estimatedDataSize = strlen($body);
                 
-                $bpo = $contentparameters->BodyPreference($output->nativebodytype);
+                $output->asbody->estimatedDataSize = strlen($output->asbody->data);
+                
+                $bpo = $contentparameters->BodyPreference($output->asbody->type);
                 if (Request::GetProtocolVersion() >= 14.0 && $bpo->GetPreview()) {
                     
                     $output->asbody->preview = Utils::Utf8_truncate($body, $bpo->GetPreview());
                 }
 
+                
                 $output->flag = new SyncMailFlags();
                 if (!empty($message->flag) && isset($message->flag->flagstatus)) {
+                    ZLog::Write(LOGLEVEL_DEBUG, "BackendIMAP->GetMessage SyncMailFlags: $message->flag->flagstatus $message->flag->flagtype");
                     $output->flag->flagstatus = $message->flag->flagstatus;
                     $output->flag->flagtype = $message->flag->flagtype;
-//flagstatus 0: clear, 1: complete, 2: active
-//flagtype: for follow up
+                    //flagstatus 0: clear, 1: complete, 2: active
+                    //flagtype: for follow up
                 }
                 else {
                     $output->flag->flagstatus = 0;
@@ -1006,18 +1010,23 @@ class BackendIMAP extends BackendDiff {
                 $output->contentclass = "urn:content-classes:message";
             }
             else {
+                $this->getBodyType($message, $output);
+                
+                $body = $this->getBody($message);
                 $body = str_replace("\n","\r\n", str_replace("\r","",$body));
-                $output->bodysize = strlen($body);
 
-                // truncate body, if requested
-                if(strlen($body) > $truncsize) {
-                    $body = Utils::Utf8_truncate($body, $truncsize);
-                    $output->bodytruncated = 1;
-                } else {
-                    $output->bodytruncated = 0;
-                }                
-
-                $output->body = $body;
+                $output->bodytruncated = 0;
+                // truncate only if the body is plaintext, if we truncate a html message we could end with a malformed code
+                if ($output->nativebodytype == SYNC_BODYPREFERENCE_PLAIN) {
+                    // truncate body, if requested
+                    if(strlen($body) > $truncsize) {
+                        $output->body = Utils::Utf8_truncate($body, $truncsize);
+                        $output->bodytruncated = 1;
+                    } else {
+                        $output->body = $body;
+                    }
+                }
+                $output->bodysize = strlen($output->body);
             }
             $output->datereceived = isset($message->headers["date"]) ? $this->cleanupDate($message->headers["date"]) : null;
             $output->messageclass = "IPM.Note";
@@ -1063,12 +1072,16 @@ class BackendIMAP extends BackendDiff {
             // convert mime-importance to AS-importance
             if (isset($message->headers["x-priority"])) {
                 $mimeImportance =  preg_replace("/\D+/", "", $message->headers["x-priority"]);
+                //MAIL 1 - most important, 3 - normal, 5 - lowest
+                //AS 0 - low, 1 - normal, 2 - important
                 if ($mimeImportance > 3)
                     $output->importance = 0;
                 if ($mimeImportance == 3)
                     $output->importance = 1;
                 if ($mimeImportance < 3)
                     $output->importance = 2;
+            } else {
+                $output->importance = 1;
             }
 
             // Attachments are only searched in the top-level part
@@ -1100,14 +1113,33 @@ class BackendIMAP extends BackendDiff {
 
                             $attachment = new SyncBaseAttachment();
 
-                            if (isset($part->body))
+                            if (isset($part->body)) {
                                 $attachment->estimatedDataSize = strlen($part->body);
+                            } else {
+                                ZLog::Write(LOGLEVEL_WARN, "BackendIMAP->GetMessage: Attachment no part->body defined!!");
+                                $attachment->estimatedDataSize = 0;
+                            }
 
                             $attachment->displayname = $attname;
                             $attachment->filereference = $folderid . ":" . $id . ":" . $i;
                             $attachment->method = 1; //Normal attachment
                             $attachment->contentid = isset($part->headers['content-id']) ? $part->headers['content-id'] : "";
-                            $attachment->isinline = 0;
+                            if ($part->disposition == "inline") {
+                                $attachment->isinline = 1;
+                                //FIXME: doesn't work, doesn't show the image inlined
+                                //$attachment->contentid = str_replace("<", "", str_replace(">", "", $attachment->contentid));
+                                //$attachment->contentlocation = str_replace("<", "", str_replace(">", "", $attachment->contentid));
+                                //$attachment->displayname = "inline." . $attname;
+                                //$mimetype = $part->headers['content-type'];
+                                //$mime = explode("/", $mimetype);
+                                //if (count($mime) == 2 && $mime[0] == "image") {
+                                    //$attachment->displayname = "inline." . $mime[1];
+                                //    $attachment->displayname = "inline.gif";
+                                //}
+                            }
+                            else {
+                                $attachment->isinline = 0;
+                            }
 
                             array_push($output->asattachments, $attachment);
                         }
@@ -1474,11 +1506,31 @@ class BackendIMAP extends BackendDiff {
      * @return
      */
     protected function getBodyType($message, &$output) {
+        $this->getBodyRecursive($message, "html", $body);
+        if (isset($body) && $body != "") {
+            ZLog::Write(LOGLEVEL_DEBUG, sprintf("BackendIMAP->getBodyType HTML (%s)", substr($body, 0, 20)));
+            if (Request::GetProtocolVersion() >= 12.0) {
+                $output->asbody->type = SYNC_BODYPREFERENCE_HTML;
+                $output->asbody->data = $body;
+            }
+            else {
+                $output->nativebodytype = SYNC_BODYPREFERENCE_HTML;
+                $output->body = $body;
+            }
+        } else {
+            ZLog::Write(LOGLEVEL_DEBUG, sprintf("BackendIMAP->getBodyType PLAIN (%s)", substr($body, 0, 20)));
+            if (Request::GetProtocolVersion() >= 12.0) {
+                $output->asbody->type = SYNC_BODYPREFERENCE_PLAIN;
+            }
+            else {
+                $output->nativebodytype = SYNC_BODYPREFERENCE_PLAIN;
+            }
+        }
+/*
         $type = isset($message->ctype_primary) ? $message->ctype_primary : "text";
         $subtype = isset($message->ctype_secondary) ? $message->ctype_secondary : "plain";
         ZLog::Write(LOGLEVEL_DEBUG, "BodyType: $type - $subtype");
 //$message->content_type
-/*
         ZLog::Write(LOGLEVEL_DEBUG, "BodyType: Default PlainText");
         $output->nativebodytype = SYNC_BODYPREFERENCE_PLAIN;
         $output->asbody->type = $type;
@@ -1495,20 +1547,6 @@ class BackendIMAP extends BackendDiff {
             $output->asbody->type = $type;
         }
 */
-$this->getBodyRecursive($message, "html", $body);
-ZLog::Write(LOGLEVEL_DEBUG, "Body: " . $body);
-        $this->getBodyRecursive($message, "plain", $body);
-
-        if($body === "") {
-            ZLog::Write(LOGLEVEL_DEBUG, "BodyType: HTML");
-            $output->nativebodytype = SYNC_BODYPREFERENCE_HTML;
-            $output->asbody->type = "html";
-        }
-        else {
-            ZLog::Write(LOGLEVEL_DEBUG, "BodyType: Default PlainText");
-            $output->nativebodytype = SYNC_BODYPREFERENCE_PLAIN;
-            $output->asbody->type = "text";
-        }
     }
 
     /**
