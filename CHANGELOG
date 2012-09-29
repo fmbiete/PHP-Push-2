@@ -1,0 +1,3 @@
+2012-09-29 <fmbiete at gmail dot com>
+    BackendIMAP - AES 12+
+    * Receive messages formatted as HTML, always prefer HTML over PLAINTEXT
