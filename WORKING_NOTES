@@ -1,0 +1,16 @@
+Enabling mime support in AS2.5
+
+                        if (($mimesupport == 2 && $this->_useHTML) ||
+                            ($mimesupport == 1 && $output->messageclass == "IPM.Note.SMIME.MultipartSigned")) { 
+                            debugLog("MIME Body Preferred");
+
+                            // For MIME - Just dump the raw message
+                            $output->mimedata = $this->GetRawMessage($id);
+
+                            $output->mimetruncated = 0;
+                            $output->mimesize = strlen($output->mimedata);
+                            unset($output->body);
+                            unset($output->bodysize);
+
+                            unset( $mimemsg );
+                        }
