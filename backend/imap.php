@@ -972,7 +972,7 @@ class BackendIMAP extends BackendDiff {
 
                 $this->getBodyType($message, $output);
 
-                // truncate only if the body is plaintext, if we truncate a html message we could end with a malformed code
+                // truncate only if the body is plaintext, if we truncate a html/mime message we could end with a malformed code
                 if ($output->asbody->type == SYNC_BODYPREFERENCE_PLAIN) {
                     $body = $this->getBody($message);
                     $body = str_replace("\n","\r\n", str_replace("\r","",$body));
@@ -989,15 +989,14 @@ class BackendIMAP extends BackendDiff {
                 $output->asbody->estimatedDataSize = strlen($output->asbody->data);
                 
                 $bpo = $contentparameters->BodyPreference($output->asbody->type);
-                if (Request::GetProtocolVersion() >= 14.0 && $bpo->GetPreview()) {
-                    
+                if (Request::GetProtocolVersion() >= 14.0 && $bpo->GetPreview()) {                   
                     $output->asbody->preview = Utils::Utf8_truncate($body, $bpo->GetPreview());
                 }
 
                 
+                // flag basic support: a new message will always have a flag status cleared
                 $output->flag = new SyncMailFlags();
                 if (!empty($message->flag) && isset($message->flag->flagstatus)) {
-                    ZLog::Write(LOGLEVEL_DEBUG, "BackendIMAP->GetMessage SyncMailFlags: $message->flag->flagstatus $message->flag->flagtype");
                     $output->flag->flagstatus = $message->flag->flagstatus;
                     $output->flag->flagtype = $message->flag->flagtype;
                     //flagstatus 0: clear, 1: complete, 2: active
@@ -1007,25 +1006,19 @@ class BackendIMAP extends BackendDiff {
                     $output->flag->flagstatus = 0;
                 }        
             }
-            else {
-                $this->getBodyType($message, $output);
-                
+            else { // ASV_2.5
                 $body = $this->getBody($message);
                 $body = str_replace("\n","\r\n", str_replace("\r","",$body));
 
                 $output->bodytruncated = 0;
-                // truncate only if the body is plaintext, if we truncate a html message we could end with a malformed code
-                if ($output->nativebodytype == SYNC_BODYPREFERENCE_PLAIN) {
-                    // truncate body, if requested
-                    if(strlen($body) > $truncsize) {
-                        $output->body = Utils::Utf8_truncate($body, $truncsize);
-                        $output->bodytruncated = 1;
-                    } else {
-                        $output->body = $body;
-                    }
+                // truncate body, if requested
+                if(strlen($body) > $truncsize) {
+                    $output->body = Utils::Utf8_truncate($body, $truncsize);
+                    $output->bodytruncated = 1;
+                } else {
+                    $output->body = $body;
                 }
-                $output->bodysize = strlen($output->body);
-                
+                $output->bodysize = strlen($output->body);                
             }
             
             $output->datereceived = isset($message->headers["date"]) ? $this->cleanupDate($message->headers["date"]) : null;
@@ -1033,8 +1026,16 @@ class BackendIMAP extends BackendDiff {
             $output->subject = isset($message->headers["subject"]) ? $message->headers["subject"] : "";
             $output->read = $stat["flags"];
             $output->from = isset($message->headers["from"]) ? $message->headers["from"] : null;
+            
+            // Thread support
             if (isset($message->headers["thread-topic"])) {
                 $output->threadtopic = $message->headers["thread-topic"];
+                if (Request::GetProtocolVersion() >= 10.4) {
+                    // since the conversationid must be unique for a thread we could use the threadtopic in base64
+                    $output->conversationid = base64_encode($output->threadtopic);
+                    if (isset($message->headers["thread-index"]))
+                        $output->$conversationindex = $message->headers["thread-index"];
+                }
             }
             // Language Code Page ID: http://msdn.microsoft.com/en-us/library/windows/desktop/dd317756%28v=vs.85%29.aspx
             $output->internetcpid = 65001; // UTF-8
@@ -1122,8 +1123,7 @@ class BackendIMAP extends BackendDiff {
                             $attachment->estimatedDataSize = isset($part->d_parameters['size']) ? $part->d_parameters['size'] : isset($part->body) ? strlen($part->body) : 0;
 
                             $attachment->displayname = $attname;
-                            //$attachment->filereference = $folderid . ":" . $id . ":" . $i;
-                            $attachment->filereference = $folderid . ":" . $id . ":1";
+                            $attachment->filereference = $folderid . ":" . $id . ":" . $i;
                             $attachment->method = 1; //Normal attachment
                             $attachment->contentid = isset($part->headers['content-id']) ? $part->headers['content-id'] : "";
                             if ($part->disposition == "inline") {
@@ -1139,7 +1139,7 @@ class BackendIMAP extends BackendDiff {
 
                             array_push($output->asattachments, $attachment);
                         }
-                        else {
+                        else { //ASV_2.5
                             if (!isset($output->attachments) || !is_array($output->attachments))
                                 $output->attachments = array();
 
@@ -1492,7 +1492,7 @@ class BackendIMAP extends BackendDiff {
     }
     
     /**
-     * Set the body type for a ASV_12+ message
+     * Set the body type for an ASV_12+ message
      *
      * @param string        $message        message subtype
      * @param string        &$output        output reference
@@ -1501,22 +1501,18 @@ class BackendIMAP extends BackendDiff {
      * @return
      */
     protected function getBodyType($message, &$output) {
-        $this->getBodyRecursive($message, "html", $body);
-        if (isset($body) && $body != "") {
-            ZLog::Write(LOGLEVEL_DEBUG, sprintf("BackendIMAP->getBodyType HTML (%s)", substr($body, 0, 20)));
-            if (Request::GetProtocolVersion() >= 12.0) {
+        if (Request::GetProtocolVersion() >= 12.0) {
+            //TODO: get MIME type
+            //TODO: check client preferences
+            $this->getBodyRecursive($message, "html", $body);
+            if (isset($body) && $body != "") {
+                ZLog::Write(LOGLEVEL_DEBUG, sprintf("BackendIMAP->getBodyType HTML (%s)", substr($body, 0, 20)));
                 $output->asbody->type = SYNC_BODYPREFERENCE_HTML;
                 $output->nativebodytype = SYNC_BODYPREFERENCE_HTML;
                 $output->asbody->data = $body;
-            }
-            else {
-                $output->nativebodytype = SYNC_BODYPREFERENCE_HTML;
-                $output->body = $body;
-            }
-        } else {
-            ZLog::Write(LOGLEVEL_DEBUG, "BackendIMAP->getBodyType PLAIN");
-            $output->nativebodytype = SYNC_BODYPREFERENCE_PLAIN;
-            if (Request::GetProtocolVersion() >= 12.0) {
+            } else {
+                ZLog::Write(LOGLEVEL_DEBUG, "BackendIMAP->getBodyType PLAIN");
+                $output->nativebodytype = SYNC_BODYPREFERENCE_PLAIN;
                 $output->asbody->type = SYNC_BODYPREFERENCE_PLAIN;
             }
         }
