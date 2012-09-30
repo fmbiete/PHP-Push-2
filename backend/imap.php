@@ -82,8 +82,9 @@ class BackendIMAP extends BackendDiff {
         $this->server = "{" . IMAP_SERVER . ":" . IMAP_PORT . "/imap" . IMAP_OPTIONS . "}";
         
         $this->excludedFolders = array();
-        if( defined(IMAP_EXCLUDED_FOLDERS) ) {
+        if( defined('IMAP_EXCLUDED_FOLDERS') ) {
             $this->excludedFolders = explode("|", IMAP_EXCLUDED_FOLDERS);
+            ZLog::Write(LOGLEVEL_DEBUG, sprintf("BackendIMAP->Logon(): Excluding Folders (%s)", IMAP_EXCLUDED_FOLDERS));
         }
 
         if (!function_exists("imap_open"))
@@ -1005,9 +1006,6 @@ class BackendIMAP extends BackendDiff {
                 else {
                     $output->flag->flagstatus = 0;
                 }        
-                
-                $output->flag->internetcpid = 65001;
-                $output->contentclass = "urn:content-classes:message";
             }
             else {
                 $this->getBodyType($message, $output);
@@ -1027,12 +1025,20 @@ class BackendIMAP extends BackendDiff {
                     }
                 }
                 $output->bodysize = strlen($output->body);
+                
             }
+            
             $output->datereceived = isset($message->headers["date"]) ? $this->cleanupDate($message->headers["date"]) : null;
             $output->messageclass = "IPM.Note";
             $output->subject = isset($message->headers["subject"]) ? $message->headers["subject"] : "";
             $output->read = $stat["flags"];
             $output->from = isset($message->headers["from"]) ? $message->headers["from"] : null;
+            if (isset($message->headers["thread-topic"])) {
+                $output->threadtopic = $message->headers["thread-topic"];
+            }
+            // Language Code Page ID: http://msdn.microsoft.com/en-us/library/windows/desktop/dd317756%28v=vs.85%29.aspx
+            $output->internetcpid = 65001; // UTF-8
+            $output->contentclass = "urn:content-classes:message";
 
             $Mail_RFC822 = new Mail_RFC822();
             $toaddr = $ccaddr = $replytoaddr = array();
@@ -1098,7 +1104,7 @@ class BackendIMAP extends BackendDiff {
                     //add part as attachment if it's disposition indicates so or if it is not a text part
                     if ((isset($part->disposition) && ($part->disposition == "attachment" || $part->disposition == "inline")) ||
                         (isset($part->ctype_primary) && $part->ctype_primary != "text")) {
-
+                       
                         if(isset($part->d_parameters['filename']))
                             $attname = $part->d_parameters['filename'];
                         else if(isset($part->ctype_parameters['name']))
@@ -1113,29 +1119,19 @@ class BackendIMAP extends BackendDiff {
 
                             $attachment = new SyncBaseAttachment();
 
-                            if (isset($part->body)) {
-                                $attachment->estimatedDataSize = strlen($part->body);
-                            } else {
-                                ZLog::Write(LOGLEVEL_WARN, "BackendIMAP->GetMessage: Attachment no part->body defined!!");
-                                $attachment->estimatedDataSize = 0;
-                            }
+                            $attachment->estimatedDataSize = isset($part->d_parameters['size']) ? $part->d_parameters['size'] : isset($part->body) ? strlen($part->body) : 0;
 
                             $attachment->displayname = $attname;
-                            $attachment->filereference = $folderid . ":" . $id . ":" . $i;
+                            //$attachment->filereference = $folderid . ":" . $id . ":" . $i;
+                            $attachment->filereference = $folderid . ":" . $id . ":1";
                             $attachment->method = 1; //Normal attachment
                             $attachment->contentid = isset($part->headers['content-id']) ? $part->headers['content-id'] : "";
                             if ($part->disposition == "inline") {
                                 $attachment->isinline = 1;
+                                if ($part->ctype_primary == "image") {
+                                    $attachment->displayname = "inline." . $part->ctype_secondary;
+                                }
                                 //FIXME: doesn't work, doesn't show the image inlined
-                                //$attachment->contentid = str_replace("<", "", str_replace(">", "", $attachment->contentid));
-                                //$attachment->contentlocation = str_replace("<", "", str_replace(">", "", $attachment->contentid));
-                                //$attachment->displayname = "inline." . $attname;
-                                //$mimetype = $part->headers['content-type'];
-                                //$mime = explode("/", $mimetype);
-                                //if (count($mime) == 2 && $mime[0] == "image") {
-                                    //$attachment->displayname = "inline." . $mime[1];
-                                //    $attachment->displayname = "inline.gif";
-                                //}
                             }
                             else {
                                 $attachment->isinline = 0;
@@ -1149,8 +1145,7 @@ class BackendIMAP extends BackendDiff {
 
                             $attachment = new SyncAttachment();
 
-                            if (isset($part->body))
-                                $attachment->attsize = strlen($part->body);
+                            $attachment->attsize = isset($part->d_parameters['size']) ? $part->d_parameters['size'] : isset($part->body) ? strlen($part->body) : 0;
 
                             $attachment->displayname = $attname;
                             $attachment->attname = $folderid . ":" . $id . ":" . $i;
@@ -1497,8 +1492,8 @@ class BackendIMAP extends BackendDiff {
     }
     
     /**
-    * Get the body type for a ASV_12+ message
-    *
+     * Set the body type for a ASV_12+ message
+     *
      * @param string        $message        message subtype
      * @param string        &$output        output reference
      *
@@ -1511,6 +1506,7 @@ class BackendIMAP extends BackendDiff {
             ZLog::Write(LOGLEVEL_DEBUG, sprintf("BackendIMAP->getBodyType HTML (%s)", substr($body, 0, 20)));
             if (Request::GetProtocolVersion() >= 12.0) {
                 $output->asbody->type = SYNC_BODYPREFERENCE_HTML;
+                $output->nativebodytype = SYNC_BODYPREFERENCE_HTML;
                 $output->asbody->data = $body;
             }
             else {
@@ -1518,35 +1514,12 @@ class BackendIMAP extends BackendDiff {
                 $output->body = $body;
             }
         } else {
-            ZLog::Write(LOGLEVEL_DEBUG, sprintf("BackendIMAP->getBodyType PLAIN (%s)", substr($body, 0, 20)));
+            ZLog::Write(LOGLEVEL_DEBUG, "BackendIMAP->getBodyType PLAIN");
+            $output->nativebodytype = SYNC_BODYPREFERENCE_PLAIN;
             if (Request::GetProtocolVersion() >= 12.0) {
                 $output->asbody->type = SYNC_BODYPREFERENCE_PLAIN;
             }
-            else {
-                $output->nativebodytype = SYNC_BODYPREFERENCE_PLAIN;
-            }
         }
-/*
-        $type = isset($message->ctype_primary) ? $message->ctype_primary : "text";
-        $subtype = isset($message->ctype_secondary) ? $message->ctype_secondary : "plain";
-        ZLog::Write(LOGLEVEL_DEBUG, "BodyType: $type - $subtype");
-//$message->content_type
-        ZLog::Write(LOGLEVEL_DEBUG, "BodyType: Default PlainText");
-        $output->nativebodytype = SYNC_BODYPREFERENCE_PLAIN;
-        $output->asbody->type = $type;
-        
-        if ($type == "text" && $subtype == "html") {
-            ZLog::Write(LOGLEVEL_DEBUG, "BodyType: HTML");
-            $output->nativebodytype = SYNC_BODYPREFERENCE_HTML;
-            $output->asbody->type = $subtype;
-        }
-        
-        if ($type == "multipart") {
-            ZLog::Write(LOGLEVEL_DEBUG, "BodyType: MIME");
-            $output->nativebodytype = SYNC_BODYPREFERENCE_MIME;
-            $output->asbody->type = $type;
-        }
-*/
     }
 
     /**

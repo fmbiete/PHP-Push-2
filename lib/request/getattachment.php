@@ -61,7 +61,13 @@ class GetAttachment extends RequestProcessor {
             $stream = $attachment->data;
             ZLog::Write(LOGLEVEL_DEBUG, sprintf("HandleGetAttachment(): attachment stream from backend: %s", $stream));
 
-            header("Content-Type: application/octet-stream");
+            //header("Content-Type: application/octet-stream");
+            if (isset($attachment->contenttype) && ($attachment->contenttype != "")) {
+                header("Content-Type: " . $attachment->contenttype);
+            }
+            else {
+                header("Content-Type: application/octet-stream");
+            }
             $l = 0;
             while (!feof($stream)) {
                 $d = fgets($stream, 4096);

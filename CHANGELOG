@@ -1,3 +1,13 @@
+2012-09-30 <fmbiete at gmail dot com>
+    BackendIMAP - AES 12+
+    * Get Attachment size looking the content-disposition, fallback to the length of the body part
+    * Bug: IMAP_EXCLUDED_FOLDERS not read
+    
+    lib/request/getAttachment.php
+    * http://z-push.sourceforge.net/phpbb/viewtopic.php?f=5&t=2055
+    
 2012-09-29 <fmbiete at gmail dot com>
     BackendIMAP - AES 12+
     * Receive messages formatted as HTML, always prefer HTML over PLAINTEXT
+ 
+    
