@@ -1030,7 +1030,7 @@ class BackendIMAP extends BackendDiff {
             // Thread support
             if (isset($message->headers["thread-topic"])) {
                 $output->threadtopic = $message->headers["thread-topic"];
-                if (Request::GetProtocolVersion() >= 10.4) {
+                if (Request::GetProtocolVersion() >= 14.0) {
                     // since the conversationid must be unique for a thread we could use the threadtopic in base64
                     $output->conversationid = base64_encode($output->threadtopic);
                     if (isset($message->headers["thread-index"]))
@@ -1039,7 +1039,9 @@ class BackendIMAP extends BackendDiff {
             }
             // Language Code Page ID: http://msdn.microsoft.com/en-us/library/windows/desktop/dd317756%28v=vs.85%29.aspx
             $output->internetcpid = 65001; // UTF-8
-            $output->contentclass = "urn:content-classes:message";
+            if (Request::GetProtocolVersion() >= 12.0) {
+                $output->contentclass = "urn:content-classes:message";
+            }
 
             $Mail_RFC822 = new Mail_RFC822();
             $toaddr = $ccaddr = $replytoaddr = array();
