@@ -950,6 +950,7 @@ class BackendIMAP extends BackendDiff {
     public function GetMessage($folderid, $id, $contentparameters) {
         $truncsize = Utils::GetTruncSize($contentparameters->GetTruncation());
         $mimesupport = $contentparameters->GetMimeSupport();
+        $bodypreference = $contentparameters->GetBodyPreference();
         ZLog::Write(LOGLEVEL_DEBUG, sprintf("BackendIMAP->GetMessage('%s','%s')", $folderid,  $id));
 
         $folderImapid = $this->getImapIdFromFolderId($folderid);
@@ -960,39 +961,77 @@ class BackendIMAP extends BackendDiff {
         if ($stat) {
             $this->imap_reopenFolder($folderImapid);
             $mail = @imap_fetchheader($this->mbox, $id, FT_UID) . @imap_body($this->mbox, $id, FT_PEEK | FT_UID);
-
+            
             $mobj = new Mail_mimeDecode($mail);
             $message = $mobj->decode(array('decode_headers' => true, 'decode_bodies' => true, 'include_bodies' => true, 'charset' => 'utf-8'));
-
+            
             $output = new SyncMail();
 
             if (Request::GetProtocolVersion() >= 12.0) {
                 $output->asbody = new SyncBaseBody();
                 $output->asbody->truncated = 0;
-
-                $this->getBodyType($message, $output);
-
-                // truncate only if the body is plaintext, if we truncate a html/mime message we could end with a malformed code
-                if ($output->asbody->type == SYNC_BODYPREFERENCE_PLAIN) {
-                    $body = $this->getBody($message);
-                    $body = str_replace("\n","\r\n", str_replace("\r","",$body));
-
-                    // truncate body, if requested
-                    if(strlen($body) > $truncsize) {
-                        $body = Utils::Utf8_truncate($body, $truncsize);
-                        $output->asbody->truncated = 1;
-                    }
-                    
-                    $output->asbody->data = $body;
+                
+                $bpReturnType = SYNC_BODYPREFERENCE_PLAIN;
+                if ($bodypreference !== false) {
+                    $bpReturnType = $this->getBodyPreferenceBestMatch($bodypreference);
                 }
+                ZLog::Write(LOGLEVEL_DEBUG, sprintf("BackendIMAP->GetMessage - getBodyPreferenceBestMatch: %d", $bpReturnType));
                 
+                //if ($mobj->HasAttachmentInline()) {
+                //    ZLog::Write(LOGLEVEL_DEBUG, "BackendIMAP->GetMessage has Attachments Inline. Sending as MIME");
+                //    $bpReturnType = SYNC_BODYPREFERENCE_MIME;
+                //}
+                
+                switch($bpReturnType) {
+                    case SYNC_BODYPREFERENCE_PLAIN:
+                        $body = $this->getBody($message);
+                        $body = str_replace("\n","\r\n", str_replace("\r","",$body));
+
+                        // truncate body, if requested
+                        if(strlen($body) > $truncsize) {
+                            $body = Utils::Utf8_truncate($body, $truncsize);
+                            $output->asbody->truncated = 1;
+                        }
+                        
+                        $output->asbody->data = $body;
+                        break;
+                    case SYNC_BODYPREFERENCE_HTML:
+                        //No truncate support for HTML mail
+                        $body = "";
+                        $this->getBodyRecursive($message, "html", $body);
+                        if ($body == "") {
+                            $this->getBodyRecursive($message, "plain", $body);
+                            $bpReturnType = SYNC_BODYPREFERENCE_PLAIN;
+                        }
+                        $body = str_replace("\n","\r\n", str_replace("\r","",$body));
+                        $output->asbody->data = $body;
+                        break;
+                    case SYNC_BODYPREFERENCE_MIME:
+                        ZLog::Write(LOGLEVEL_DEBUG, "BackendIMAP->GetMessage MIME Format NOT SUPPORTED");
+                        $output->asbody->data = $mail;
+                        break;
+                    case SYNC_BODYPREFERENCE_RTF:
+                        ZLog::Write(LOGLEVEL_DEBUG, "BackendIMAP->GetMessage RTF Format NOT CHECKED");
+                        $body = $this->getBody($message);
+                        $body = str_replace("\n","\r\n", str_replace("\r","",$body));
+
+                        // truncate body, if requested
+                        if(strlen($body) > $truncsize) {
+                            $body = Utils::Utf8_truncate($body, $truncsize);
+                            $output->asbody->truncated = 1;
+                        }
+                        
+                        $output->asbody->data = base64_encode($body);
+                        break;
+                }
+                $output->asbody->type = $bpReturnType;
+                $output->nativebodytype = $bpReturnType;              
                 $output->asbody->estimatedDataSize = strlen($output->asbody->data);
-                
+
                 $bpo = $contentparameters->BodyPreference($output->asbody->type);
-                if (Request::GetProtocolVersion() >= 14.0 && $bpo->GetPreview()) {                   
+                if (Request::GetProtocolVersion() >= 14.0 && $bpo->GetPreview()) {
                     $output->asbody->preview = Utils::Utf8_truncate($body, $bpo->GetPreview());
                 }
-
                 
                 // flag basic support: a new message will always have a flag status cleared
                 $output->flag = new SyncMailFlags();
@@ -1018,7 +1057,9 @@ class BackendIMAP extends BackendDiff {
                 } else {
                     $output->body = $body;
                 }
-                $output->bodysize = strlen($output->body);                
+                $output->bodysize = strlen($output->body);
+                
+                //TODO: MIME SUPPORT                     $output->mimetruncated, $output->mimedata, $output->mimesize
             }
             
             $output->datereceived = isset($message->headers["date"]) ? $this->cleanupDate($message->headers["date"]) : null;
@@ -1093,8 +1134,8 @@ class BackendIMAP extends BackendDiff {
                 $output->importance = 1;
             }
 
-            // Attachments are only searched in the top-level part
-            if(isset($message->parts)) {
+            // Attachments are only searched in the top-level part, and not for MIME messages
+            if($bpReturnType != SYNC_BODYPREFERENCE_MIME && isset($message->parts)) {
                 $mparts = $message->parts;
                 for ($i=0; $i<count($mparts); $i++) {
                     $part = $mparts[$i];
@@ -1491,6 +1532,23 @@ class BackendIMAP extends BackendDiff {
                 }
             }
         }
+    }
+    
+    /**
+     * Returns the best match of preferred body preference types.
+     *
+     * @param array             $bpTypes
+     *
+     * @access private
+     * @return int
+     */
+    private function getBodyPreferenceBestMatch($bpTypes) {
+        // The best choice is RTF, then HTML and then MIME in order to save bandwidth
+        // because MIME is a complete message including the headers and attachments
+        if (in_array(SYNC_BODYPREFERENCE_RTF, $bpTypes))  return SYNC_BODYPREFERENCE_RTF;
+        if (in_array(SYNC_BODYPREFERENCE_HTML, $bpTypes)) return SYNC_BODYPREFERENCE_HTML;
+        if (in_array(SYNC_BODYPREFERENCE_MIME, $bpTypes)) return SYNC_BODYPREFERENCE_MIME;
+        return SYNC_BODYPREFERENCE_PLAIN;
     }
     
     /**
