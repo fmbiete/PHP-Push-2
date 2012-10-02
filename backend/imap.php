@@ -556,6 +556,35 @@ class BackendIMAP extends BackendDiff {
         $mobj = new Mail_mimeDecode($mail);
         $message = $mobj->decode(array('decode_headers' => true, 'decode_bodies' => true, 'include_bodies' => true, 'charset' => 'utf-8'));
 
+        //trying parts
+        $mparts = $message->parts;
+        for ($i = 0; $i < count($mparts); $i++) {
+            $auxpart = $mparts[$i];
+            //recursively add parts
+            if($auxpart->ctype_primary == "multipart" && ($auxpart->ctype_secondary == "mixed" || $auxpart->ctype_secondary == "alternative"  || $auxpart->ctype_secondary == "related")) {
+                foreach($auxpart->parts as $spart)
+                    $mparts[] = $spart;
+            }
+        }
+        
+        if (!isset($mparts[$part]->body))
+            throw new StatusException(sprintf("BackendIMAP->GetAttachmentData('%s'): Error, requested part key can not be found: '%d'", $attname, $part), SYNC_ITEMOPERATIONSSTATUS_INVALIDATT);
+
+        // unset mimedecoder & mail
+        unset($mobj);
+        unset($mail);
+
+        include_once('include/stringstreamwrapper.php');
+        $attachment = new SyncItemOperationsAttachment();
+        $attachment->data = StringStreamWrapper::Open($mparts[$part]->body);
+        if (isset($mparts[$part]->ctype_primary) && isset($mparts[$part]->ctype_secondary))
+            $attachment->contenttype = $mparts[$part]->ctype_primary .'/'.$mparts[$part]->ctype_secondary;
+            
+        unset($mparts);
+        unset($message);
+
+
+        /*
         if (!isset($message->parts[$part]->body))
             throw new StatusException(sprintf("BackendIMAP->GetAttachmentData('%s'): Error, requested part key can not be found: '%d'", $attname, $part), SYNC_ITEMOPERATIONSSTATUS_INVALIDATT);
 
@@ -568,6 +597,7 @@ class BackendIMAP extends BackendDiff {
         $attachment->data = StringStreamWrapper::Open($message->parts[$part]->body);
         if (isset($message->parts[$part]->ctype_primary) && isset($message->parts[$part]->ctype_secondary))
             $attachment->contenttype = $message->parts[$part]->ctype_primary .'/'.$message->parts[$part]->ctype_secondary;
+            */
             
         ZLog::Write(LOGLEVEL_DEBUG, sprintf("BackendIMAP->GetAttachmentData contenttype %s", $attachment->contenttype));
 
@@ -1208,6 +1238,7 @@ class BackendIMAP extends BackendDiff {
 
         return false;
     }
+    
 
     /**
      * Returns message stats, analogous to the folder stats from StatFolder().
