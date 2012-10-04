@@ -554,7 +554,8 @@ class BackendIMAP extends BackendDiff {
         $mail = @imap_fetchheader($this->mbox, $id, FT_UID) . @imap_body($this->mbox, $id, FT_PEEK | FT_UID);
 
         $mobj = new Mail_mimeDecode($mail);
-        $message = $mobj->decode(array('decode_headers' => true, 'decode_bodies' => true, 'include_bodies' => true, 'charset' => 'utf-8'));
+        //$message = $mobj->decode(array('decode_headers' => true, 'decode_bodies' => true, 'include_bodies' => true, 'charset' => 'utf-8'));
+        $message = $mobj->decode(array('decode_headers' => true, 'decode_bodies' => false, 'include_bodies' => true, 'charset' => 'utf-8'));
 
         //trying parts
         $mparts = $message->parts;
@@ -576,28 +577,13 @@ class BackendIMAP extends BackendDiff {
 
         include_once('include/stringstreamwrapper.php');
         $attachment = new SyncItemOperationsAttachment();
-        $attachment->data = StringStreamWrapper::Open($mparts[$part]->body);
+        //$attachment->data = StringStreamWrapper::Open($mparts[$part]->body);
+        $attachment->data = $mparts[$part]->body;
         if (isset($mparts[$part]->ctype_primary) && isset($mparts[$part]->ctype_secondary))
             $attachment->contenttype = $mparts[$part]->ctype_primary .'/'.$mparts[$part]->ctype_secondary;
             
         unset($mparts);
         unset($message);
-
-
-        /*
-        if (!isset($message->parts[$part]->body))
-            throw new StatusException(sprintf("BackendIMAP->GetAttachmentData('%s'): Error, requested part key can not be found: '%d'", $attname, $part), SYNC_ITEMOPERATIONSSTATUS_INVALIDATT);
-
-        // unset mimedecoder & mail
-        unset($mobj);
-        unset($mail);
-
-        include_once('include/stringstreamwrapper.php');
-        $attachment = new SyncItemOperationsAttachment();
-        $attachment->data = StringStreamWrapper::Open($message->parts[$part]->body);
-        if (isset($message->parts[$part]->ctype_primary) && isset($message->parts[$part]->ctype_secondary))
-            $attachment->contenttype = $message->parts[$part]->ctype_primary .'/'.$message->parts[$part]->ctype_secondary;
-            */
             
         ZLog::Write(LOGLEVEL_DEBUG, sprintf("BackendIMAP->GetAttachmentData contenttype %s", $attachment->contenttype));
 
@@ -1098,16 +1084,19 @@ class BackendIMAP extends BackendDiff {
             $output->read = $stat["flags"];
             $output->from = isset($message->headers["from"]) ? $message->headers["from"] : null;
             
+/*
             // Thread support
             if (isset($message->headers["thread-topic"])) {
                 $output->threadtopic = $message->headers["thread-topic"];
                 if (Request::GetProtocolVersion() >= 14.0) {
-                    // since the conversationid must be unique for a thread we could use the threadtopic in base64
-                    $output->conversationid = base64_encode($output->threadtopic);
+                    // since the conversationid must be unique for a thread we could use the threadtopic in base64 minus the ==
+                    $output->conversationid = strtoupper(str_replace("=", "", base64_encode($output->threadtopic)));
                     if (isset($message->headers["thread-index"]))
-                        $output->$conversationindex = $message->headers["thread-index"];
+                        $output->conversationindex = strtoupper($message->headers["thread-index"]);
                 }
             }
+*/
+
             // Language Code Page ID: http://msdn.microsoft.com/en-us/library/windows/desktop/dd317756%28v=vs.85%29.aspx
             $output->internetcpid = 65001; // UTF-8
             if (Request::GetProtocolVersion() >= 12.0) {
@@ -1198,13 +1187,9 @@ class BackendIMAP extends BackendDiff {
                             $attachment->displayname = $attname;
                             $attachment->filereference = $folderid . ":" . $id . ":" . $i;
                             $attachment->method = 1; //Normal attachment
-                            $attachment->contentid = isset($part->headers['content-id']) ? $part->headers['content-id'] : "";
+                            $attachment->contentid = isset($part->headers['content-id']) ? str_replace("<", "", str_replace(">", "", $part->headers['content-id'])) : "";
                             if ($part->disposition == "inline") {
                                 $attachment->isinline = 1;
-                                if ($part->ctype_primary == "image") {
-                                    $attachment->displayname = "inline." . $part->ctype_secondary;
-                                }
-                                //FIXME: doesn't work, doesn't show the image inlined
                             }
                             else {
                                 $attachment->isinline = 0;
@@ -1223,7 +1208,7 @@ class BackendIMAP extends BackendDiff {
                             $attachment->displayname = $attname;
                             $attachment->attname = $folderid . ":" . $id . ":" . $i;
                             $attachment->attmethod = 1;
-                            $attachment->attoid = isset($part->headers['content-id']) ? $part->headers['content-id'] : "";
+                            $attachment->attoid = isset($part->headers['content-id']) ? str_replace("<", "", str_replace(">", "", $part->headers['content-id'])) : "";
 
                             array_push($output->attachments, $attachment);
                         }                        

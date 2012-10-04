@@ -1,3 +1,9 @@
+2012-10-04 <fmbiete at gmail dot com>
+    BackendIMAP - AES 12+
+    * Receive HTML messages with inlined images
+    * Set the body type of the message based on the preferences of the mobile device
+    * Bug: some attachments are truncated when fetching them
+
 2012-09-30 <fmbiete at gmail dot com>
     BackendIMAP - AES 12+
     * Get Attachment size looking the content-disposition, fallback to the length of the body part

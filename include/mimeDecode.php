@@ -166,15 +166,7 @@ class Mail_mimeDecode
      * @access private
      */
     var $_rfc822_bodies;
-    
-    
-    /**
-     * Flag to determine whether there is a inlined attachment
-     *
-     * @var     boolean
-     * @access private
-     */
-    var $_attachment_inline;
+
 
     /**
      * Constructor.
@@ -195,7 +187,6 @@ class Mail_mimeDecode
         $this->_decode_bodies  = false;
         $this->_include_bodies = true;
         $this->_rfc822_bodies  = false;
-        $this->_attachment_inline = false;
     }
 
     /**
@@ -306,8 +297,6 @@ class Mail_mimeDecode
                 case 'content-disposition':
                     $content_disposition = $this->_parseHeaderValue($headers[$key]['value']);
                     $return->disposition   = $content_disposition['value'];
-                    if ($content_disposition['value'] == 'inline')
-                        $this->_attachment_inline = true;
                     if (isset($content_disposition['other'])) {
                         while (list($p_name, $p_value) = each($content_disposition['other'])) {
                             $return->d_parameters[$p_name] = $p_value;
@@ -931,15 +920,5 @@ class Mail_mimeDecode
     function raiseError($message) {
         ZLog::Write(LOGLEVEL_ERROR, "mimeDecode error: ". $message);
         return false;
-    }
-    
-    /**
-     * Return if the message has attachment inlined.
-     *
-     * @return boolean
-     * @access public
-     */
-    public function HasAttachmentInline() {
-        return $this->_attachment_inline;
     }
 } // End of class
