@@ -993,30 +993,26 @@ class BackendIMAP extends BackendDiff {
                 }
                 ZLog::Write(LOGLEVEL_DEBUG, sprintf("BackendIMAP->GetMessage - getBodyPreferenceBestMatch: %d", $bpReturnType));
                 
-                //if ($mobj->HasAttachmentInline()) {
-                //    ZLog::Write(LOGLEVEL_DEBUG, "BackendIMAP->GetMessage has Attachments Inline. Sending as MIME");
-                //    $bpReturnType = SYNC_BODYPREFERENCE_MIME;
-                //}
+                $this->getBodyRecursive($message, "plain", $plainBody); 
+                $this->getBodyRecursive($message, "html", $htmlBody);
                 
                 switch($bpReturnType) {
                     case SYNC_BODYPREFERENCE_PLAIN:
-                        $body = $this->getBody($message);
-                        $body = str_replace("\n","\r\n", str_replace("\r","",$body));
+                        $plainBody = str_replace("\n","\r\n", str_replace("\r","",$plainBody));
 
                         // truncate body, if requested
-                        if(strlen($body) > $truncsize) {
-                            $body = Utils::Utf8_truncate($body, $truncsize);
+                        if(strlen($plainBody) > $truncsize) {
+                            $plainBody = Utils::Utf8_truncate($plainBody, $truncsize);
                             $output->asbody->truncated = 1;
                         }
                         
-                        $output->asbody->data = $body;
+                        $output->asbody->data = $plainBody;
                         break;
                     case SYNC_BODYPREFERENCE_HTML:
                         //No truncate support for HTML mail
-                        $body = "";
-                        $this->getBodyRecursive($message, "html", $body);
+                        $body = $htmlBody;
                         if ($body == "") {
-                            $this->getBodyRecursive($message, "plain", $body);
+                            $body = $plainBody;
                             $bpReturnType = SYNC_BODYPREFERENCE_PLAIN;
                         }
                         $body = str_replace("\n","\r\n", str_replace("\r","",$body));
@@ -1024,12 +1020,11 @@ class BackendIMAP extends BackendDiff {
                         break;
                     case SYNC_BODYPREFERENCE_MIME:
                         ZLog::Write(LOGLEVEL_DEBUG, "BackendIMAP->GetMessage MIME Format NOT SUPPORTED");
-                        $output->asbody->data = $mail;
+                        $output->asbody->data = $plainBody;
                         break;
                     case SYNC_BODYPREFERENCE_RTF:
                         ZLog::Write(LOGLEVEL_DEBUG, "BackendIMAP->GetMessage RTF Format NOT CHECKED");
-                        $body = $this->getBody($message);
-                        $body = str_replace("\n","\r\n", str_replace("\r","",$body));
+                        $body = str_replace("\n","\r\n", str_replace("\r","",$plainBody));
 
                         // truncate body, if requested
                         if(strlen($body) > $truncsize) {
@@ -1046,7 +1041,7 @@ class BackendIMAP extends BackendDiff {
 
                 $bpo = $contentparameters->BodyPreference($output->asbody->type);
                 if (Request::GetProtocolVersion() >= 14.0 && $bpo->GetPreview()) {
-                    $output->asbody->preview = Utils::Utf8_truncate($body, $bpo->GetPreview());
+                    $output->asbody->preview = Utils::Utf8_truncate($plainBody, $bpo->GetPreview());
                 }
                 
                 // flag basic support: a new message will always have a flag status cleared
@@ -1085,7 +1080,7 @@ class BackendIMAP extends BackendDiff {
             $output->from = isset($message->headers["from"]) ? $message->headers["from"] : null;
             
 /*
-            // Thread support
+            // Thread support: FIXME: zpush loop freezes
             if (isset($message->headers["thread-topic"])) {
                 $output->threadtopic = $message->headers["thread-topic"];
                 if (Request::GetProtocolVersion() >= 14.0) {
