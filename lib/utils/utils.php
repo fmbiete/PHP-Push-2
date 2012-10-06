@@ -832,6 +832,30 @@ class Utils {
         }
         return $string;
     }
+
+    /**
+     * Converts a html string into a plain text string
+     *
+     * @param string $html
+     *
+     * @access public
+     * @return string
+     */
+    public static function ConvertHtmlToText($html) {
+        $plaintext = "";
+        if (class_exists('html2text')) {
+            // convert a html message into plaintext keeping some format
+            $h2t = new html2text($html, false);
+            $plaintext = $h2t->get_text();
+            unset($h2t);
+        } else {
+            // remove css-style tags
+            $plaintext = preg_replace("/<style.*?<\/style>/is", "", $html);
+            // remove all other html
+            $plaintext = strip_tags($plaintext);
+        }
+        return $plaintext;
+    }
 }
 
 
