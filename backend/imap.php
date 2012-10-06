@@ -995,6 +995,9 @@ class BackendIMAP extends BackendDiff {
                 
                 $this->getBodyRecursive($message, "plain", $plainBody); 
                 $this->getBodyRecursive($message, "html", $htmlBody);
+                if ($plainBody == "") {
+                    $plainBody = Utils::ConvertHtmlToText($htmlBody);
+                }
                 
                 switch($bpReturnType) {
                     case SYNC_BODYPREFERENCE_PLAIN:
@@ -1019,8 +1022,9 @@ class BackendIMAP extends BackendDiff {
                         $output->asbody->data = $body;
                         break;
                     case SYNC_BODYPREFERENCE_MIME:
-                        ZLog::Write(LOGLEVEL_DEBUG, "BackendIMAP->GetMessage MIME Format NOT SUPPORTED");
-                        $output->asbody->data = $plainBody;
+                        ZLog::Write(LOGLEVEL_DEBUG, "BackendIMAP->GetMessage MIME Format");
+                        //We don't need to create a new MIME mail, we already have one!!
+                        $output->asbody->data = $mail;
                         break;
                     case SYNC_BODYPREFERENCE_RTF:
                         ZLog::Write(LOGLEVEL_DEBUG, "BackendIMAP->GetMessage RTF Format NOT CHECKED");
