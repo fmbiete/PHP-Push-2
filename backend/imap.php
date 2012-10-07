@@ -983,26 +983,28 @@ class BackendIMAP extends BackendDiff {
             
             $output = new SyncMail();
 
+            //Select body type preference
+            $bpReturnType = SYNC_BODYPREFERENCE_PLAIN;
+            if ($bodypreference !== false) {
+                $bpReturnType = $this->getBodyPreferenceBestMatch($bodypreference);
+            }
+            ZLog::Write(LOGLEVEL_DEBUG, sprintf("BackendIMAP->GetMessage - getBodyPreferenceBestMatch: %d", $bpReturnType));
+            
+            //Get body data
+            $this->getBodyRecursive($message, "plain", $plainBody); 
+            $this->getBodyRecursive($message, "html", $htmlBody);
+            if ($plainBody == "") {
+                $plainBody = Utils::ConvertHtmlToText($htmlBody);
+            }
+            $htmlBody = str_replace("\n","\r\n", str_replace("\r","",$htmlBody));
+            $plainBody = str_replace("\n","\r\n", str_replace("\r","",$plainBody));
+
             if (Request::GetProtocolVersion() >= 12.0) {
                 $output->asbody = new SyncBaseBody();
                 $output->asbody->truncated = 0;
-                
-                $bpReturnType = SYNC_BODYPREFERENCE_PLAIN;
-                if ($bodypreference !== false) {
-                    $bpReturnType = $this->getBodyPreferenceBestMatch($bodypreference);
-                }
-                ZLog::Write(LOGLEVEL_DEBUG, sprintf("BackendIMAP->GetMessage - getBodyPreferenceBestMatch: %d", $bpReturnType));
-                
-                $this->getBodyRecursive($message, "plain", $plainBody); 
-                $this->getBodyRecursive($message, "html", $htmlBody);
-                if ($plainBody == "") {
-                    $plainBody = Utils::ConvertHtmlToText($htmlBody);
-                }
-                
+                                             
                 switch($bpReturnType) {
                     case SYNC_BODYPREFERENCE_PLAIN:
-                        $plainBody = str_replace("\n","\r\n", str_replace("\r","",$plainBody));
-
                         // truncate body, if requested
                         if(strlen($plainBody) > $truncsize) {
                             $plainBody = Utils::Utf8_truncate($plainBody, $truncsize);
@@ -1013,13 +1015,13 @@ class BackendIMAP extends BackendDiff {
                         break;
                     case SYNC_BODYPREFERENCE_HTML:
                         //No truncate support for HTML mail
-                        $body = $htmlBody;
-                        if ($body == "") {
-                            $body = $plainBody;
+                        if ($htmlBody == "") {
+                            $output->asbody->data = $plainBody;
                             $bpReturnType = SYNC_BODYPREFERENCE_PLAIN;
                         }
-                        $body = str_replace("\n","\r\n", str_replace("\r","",$body));
-                        $output->asbody->data = $body;
+                        else {
+                            $output->asbody->data = $htmlBody;
+                        }
                         break;
                     case SYNC_BODYPREFERENCE_MIME:
                         ZLog::Write(LOGLEVEL_DEBUG, "BackendIMAP->GetMessage MIME Format");
@@ -1028,15 +1030,8 @@ class BackendIMAP extends BackendDiff {
                         break;
                     case SYNC_BODYPREFERENCE_RTF:
                         ZLog::Write(LOGLEVEL_DEBUG, "BackendIMAP->GetMessage RTF Format NOT CHECKED");
-                        $body = str_replace("\n","\r\n", str_replace("\r","",$plainBody));
-
-                        // truncate body, if requested
-                        if(strlen($body) > $truncsize) {
-                            $body = Utils::Utf8_truncate($body, $truncsize);
-                            $output->asbody->truncated = 1;
-                        }
-                        
-                        $output->asbody->data = base64_encode($body);
+                        //TODO: truncate support
+                        $output->asbody->data = base64_encode($plainBody);
                         break;
                 }
                 $output->asbody->type = $bpReturnType;
@@ -1061,20 +1056,22 @@ class BackendIMAP extends BackendDiff {
                 }        
             }
             else { // ASV_2.5
-                $body = $this->getBody($message);
-                $body = str_replace("\n","\r\n", str_replace("\r","",$body));
-
                 $output->bodytruncated = 0;
-                // truncate body, if requested
-                if(strlen($body) > $truncsize) {
-                    $output->body = Utils::Utf8_truncate($body, $truncsize);
-                    $output->bodytruncated = 1;
-                } else {
-                    $output->body = $body;
+                if ($bpReturnType == SYNC_BODYPREFERENCE_MIME) {
+                    $output->mimetruncated = 0;
+                    $output->mimedata = $mail;
+                    $output->mimesize = strlen($output->mimedata);
+                } 
+                else {                
+                    // truncate body, if requested
+                    if(strlen($plainBody) > $truncsize) {
+                        $output->body = Utils::Utf8_truncate($plainBody, $truncsize);
+                        $output->bodytruncated = 1;
+                    } else {
+                        $output->body = $plainBody;
+                    }
+                    $output->bodysize = strlen($output->body);
                 }
-                $output->bodysize = strlen($output->body);
-                
-                //TODO: MIME SUPPORT                     $output->mimetruncated, $output->mimedata, $output->mimesize
             }
             
             $output->datereceived = isset($message->headers["date"]) ? $this->cleanupDate($message->headers["date"]) : null;
@@ -1083,18 +1080,18 @@ class BackendIMAP extends BackendDiff {
             $output->read = $stat["flags"];
             $output->from = isset($message->headers["from"]) ? $message->headers["from"] : null;
             
-/*
-            // Thread support: FIXME: zpush loop freezes
             if (isset($message->headers["thread-topic"])) {
                 $output->threadtopic = $message->headers["thread-topic"];
+                /*
+                //FIXME: Conversation support, get conversationid and conversationindex good values
                 if (Request::GetProtocolVersion() >= 14.0) {
                     // since the conversationid must be unique for a thread we could use the threadtopic in base64 minus the ==
                     $output->conversationid = strtoupper(str_replace("=", "", base64_encode($output->threadtopic)));
                     if (isset($message->headers["thread-index"]))
                         $output->conversationindex = strtoupper($message->headers["thread-index"]);
                 }
+                */
             }
-*/
 
             // Language Code Page ID: http://msdn.microsoft.com/en-us/library/windows/desktop/dd317756%28v=vs.85%29.aspx
             $output->internetcpid = 65001; // UTF-8
@@ -1152,7 +1149,7 @@ class BackendIMAP extends BackendDiff {
                 $output->importance = 1;
             }
 
-            // Attachments are only searched in the top-level part, and not for MIME messages
+            // Attachments are not needed for MIME messages
             if($bpReturnType != SYNC_BODYPREFERENCE_MIME && isset($message->parts)) {
                 $mparts = $message->parts;
                 for ($i=0; $i<count($mparts); $i++) {
@@ -1309,6 +1306,35 @@ class BackendIMAP extends BackendDiff {
 
         return $status;
     }
+
+    /**
+     * Changes the 'star' flag of a message on disk
+     *
+     * @param string        $folderid       id of the folder
+     * @param string        $id             id of the message
+     * @param int           $flags          read flag of the message
+     *
+     * @access public
+     * @return boolean                      status of the operation
+     * @throws StatusException              could throw specific SYNC_STATUS_* exceptions
+     */    
+    public function SetImportantFlag($folderid, $id, $flags) {
+        ZLog::Write(LOGLEVEL_DEBUG, sprintf("BackendIMAP->SetImportantFlag('%s','%s','%s')", $folderid, $id, $flags));
+        $folderImapid = $this->getImapIdFromFolderId($folderid);
+
+        $this->imap_reopenFolder($folderImapid);
+
+        if ($flags == 0) {
+            // set as "Unflagged" (no starred)
+            $status = @imap_clearflag_full ( $this->mbox, $id, "\\Flagged", ST_UID);
+        } else {
+            // set as "Flagged" (starred)
+            $status = @imap_setflag_full($this->mbox, $id, "\\Flagged",ST_UID);
+        }
+
+        return $status;
+    }
+        
 
     /**
      * Called when the user has requested to delete (really delete) a message
