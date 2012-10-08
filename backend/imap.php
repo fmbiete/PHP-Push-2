@@ -46,7 +46,6 @@
 include_once('lib/default/diffbackend/diffbackend.php');
 include_once('include/mimeDecode.php');
 require_once('include/z_RFC822.php');
-require_once('include/class.html2text.inc');
 
 class BackendIMAP extends BackendDiff {
     protected $wasteID;
