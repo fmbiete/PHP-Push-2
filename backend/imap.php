@@ -1000,20 +1000,12 @@ class BackendIMAP extends BackendDiff {
 
             if (Request::GetProtocolVersion() >= 12.0) {
                 $output->asbody = new SyncBaseBody();
-                $output->asbody->truncated = 0;
                                              
                 switch($bpReturnType) {
                     case SYNC_BODYPREFERENCE_PLAIN:
-                        // truncate body, if requested
-                        if(strlen($plainBody) > $truncsize) {
-                            $plainBody = Utils::Utf8_truncate($plainBody, $truncsize);
-                            $output->asbody->truncated = 1;
-                        }
-                        
                         $output->asbody->data = $plainBody;
                         break;
                     case SYNC_BODYPREFERENCE_HTML:
-                        //No truncate support for HTML mail
                         if ($htmlBody == "") {
                             $output->asbody->data = $plainBody;
                             $bpReturnType = SYNC_BODYPREFERENCE_PLAIN;
@@ -1029,10 +1021,15 @@ class BackendIMAP extends BackendDiff {
                         break;
                     case SYNC_BODYPREFERENCE_RTF:
                         ZLog::Write(LOGLEVEL_DEBUG, "BackendIMAP->GetMessage RTF Format NOT CHECKED");
-                        //TODO: truncate support
                         $output->asbody->data = base64_encode($plainBody);
                         break;
                 }
+                // truncate body, if requested
+                if(strlen($output->asbody->data) > $truncsize) {
+                    $output->asbody->data = Utils::Utf8_truncate($output->asbody->data, $truncsize);
+                    $output->asbody->truncated = 1;
+                }
+
                 $output->asbody->type = $bpReturnType;
                 $output->nativebodytype = $bpReturnType;              
                 $output->asbody->estimatedDataSize = strlen($output->asbody->data);
@@ -1040,6 +1037,9 @@ class BackendIMAP extends BackendDiff {
                 $bpo = $contentparameters->BodyPreference($output->asbody->type);
                 if (Request::GetProtocolVersion() >= 14.0 && $bpo->GetPreview()) {
                     $output->asbody->preview = Utils::Utf8_truncate($plainBody, $bpo->GetPreview());
+                }
+                else {
+                    $output->asbody->truncated = 0;
                 }
                 
                 // flag basic support: a new message will always have a flag status cleared
@@ -1057,17 +1057,25 @@ class BackendIMAP extends BackendDiff {
             else { // ASV_2.5
                 $output->bodytruncated = 0;
                 if ($bpReturnType == SYNC_BODYPREFERENCE_MIME) {
-                    $output->mimetruncated = 0;
-                    $output->mimedata = $mail;
+                    if (strlen($mail) > $truncsize) {
+                        $output->mimedata = Utils::Utf8_truncate($mail, $truncsize);
+                        $output->mimetruncated = 1;
+                    }
+                    else {
+                        $output->mimetruncated = 0;
+                        $output->mimedata = $mail;
+                    }
                     $output->mimesize = strlen($output->mimedata);
                 } 
                 else {                
                     // truncate body, if requested
-                    if(strlen($plainBody) > $truncsize) {
+                    if (strlen($plainBody) > $truncsize) {
                         $output->body = Utils::Utf8_truncate($plainBody, $truncsize);
                         $output->bodytruncated = 1;
-                    } else {
+                    } 
+                    else {
                         $output->body = $plainBody;
+                        $output->bodytruncated = 0;
                     }
                     $output->bodysize = strlen($output->body);
                 }

@@ -1,3 +1,7 @@
+2012-10-08 <fmbiete at gmail dot com>
+    BackendIMAP
+    * Truncation support
+
 2012-10-05 <fmbiete at gmail dot com>
     BackendIMAP - AES 25
     * MIME support
