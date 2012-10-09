@@ -1191,7 +1191,7 @@ class BackendIMAP extends BackendDiff {
                             $attachment->filereference = $folderid . ":" . $id . ":" . $i;
                             $attachment->method = 1; //Normal attachment
                             $attachment->contentid = isset($part->headers['content-id']) ? str_replace("<", "", str_replace(">", "", $part->headers['content-id'])) : "";
-                            if ($part->disposition == "inline") {
+                            if (isset($part->disposition) && $part->disposition == "inline") {
                                 $attachment->isinline = 1;
                             }
                             else {
