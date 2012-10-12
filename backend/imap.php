@@ -1041,18 +1041,6 @@ class BackendIMAP extends BackendDiff {
                 else {
                     $output->asbody->truncated = 0;
                 }
-                
-                // flag basic support: a new message will always have a flag status cleared
-                $output->flag = new SyncMailFlags();
-                if (!empty($message->flag) && isset($message->flag->flagstatus)) {
-                    $output->flag->flagstatus = $message->flag->flagstatus;
-                    $output->flag->flagtype = $message->flag->flagtype;
-                    //flagstatus 0: clear, 1: complete, 2: active
-                    //flagtype: for follow up
-                }
-                else {
-                    $output->flag->flagstatus = 0;
-                }        
             }
             else { // ASV_2.5
                 $output->bodytruncated = 0;
@@ -1104,6 +1092,14 @@ class BackendIMAP extends BackendDiff {
             $output->internetcpid = 65001; // UTF-8
             if (Request::GetProtocolVersion() >= 12.0) {
                 $output->contentclass = "urn:content-classes:message";
+
+                if (isset($stat["flagged"]) && $stat["flagged"]) {
+                    $output->flag = new SyncMailFlags();
+                    //flagstatus 0: clear, 1: complete, 2: active
+                    $output->flag->flagstatus = SYNC_FLAGSTATUS_ACTIVE;
+                    //flagtype: for follow up
+                    $output->flag->flagtype = "FollowUp";                    
+                }               
             }
 
             $Mail_RFC822 = new Mail_RFC822();
@@ -1258,18 +1254,29 @@ class BackendIMAP extends BackendDiff {
         $entry = array();
         $entry["mod"] = (array_key_exists( "date", $vars)) ? $overview[0]->date : "";
         $entry["id"] = $overview[0]->uid;
-        // 'seen' aka 'read' is the only flag we want to know about
-        $entry["flags"] = 0;
-
-        if(array_key_exists( "seen", $vars) && $overview[0]->seen)
+        
+        // 'seen' aka 'read'
+        if (array_key_exists("seen", $vars) && $overview[0]->seen) {
             $entry["flags"] = 1;
+        }
+        else {
+            $entry["flags"] = 0;
+        }
+
+        // 'flagged' aka 'FollowUp' aka 'starred'
+        if (array_key_exists("flagged", $vars) && $overview[0]->flagged) {
+            $entry["flagged"] = 1;
+        }
+        else {
+            $entry["flagged"] = 0;
+        }
 
         return $entry;
     }
 
     /**
      * Called when a message has been changed on the mobile.
-     * This functionality is not available for emails.
+     * Added support for FollowUp flag
      *
      * @param string        $folderid       id of the folder
      * @param string        $id             id of the message
@@ -1281,8 +1288,40 @@ class BackendIMAP extends BackendDiff {
      */
     public function ChangeMessage($folderid, $id, $message) {
         ZLog::Write(LOGLEVEL_DEBUG, sprintf("BackendIMAP->ChangeMessage('%s','%s','%s')", $folderid, $id, get_class($message)));
+        
+        if (isset($message->flag)) {
+            ZLog::Write(LOGLEVEL_DEBUG, sprintf("BackendIMAP->ChangeMessage('Setting flag')"));
+
+            $folderImapid = $this->getImapIdFromFolderId($folderid);
+
+            $this->imap_reopenFolder($folderImapid);
+           
+            if (isset($message->flag->flagstatus) && $message->flag->flagstatus == 2) {
+                if(isset($message->flag->flagtype) && $message->flag->flagtype == "FollowUp") {
+                    ZLog::Write(LOGLEVEL_DEBUG, "Set On FollowUp -> IMAP Flagged");
+                    $status = @imap_setflag_full($this->mbox, $id, "\\Flagged",ST_UID);
+                }
+                else {
+                    ZLog::Write(LOGLEVEL_DEBUG, "Clearing Flagged");
+                    $status = @imap_clearflag_full ( $this->mbox, $id, "\\Flagged", ST_UID);
+                }
+            }
+            else {
+                ZLog::Write(LOGLEVEL_DEBUG, "Clearing Flagged");
+                $status = @imap_clearflag_full ( $this->mbox, $id, "\\Flagged", ST_UID);
+            }
+            
+            if ($status) {
+                ZLog::Write(LOGLEVEL_DEBUG, "Flagged changed");
+            }
+            else {
+                ZLog::Write(LOGLEVEL_DEBUG, "Flagged failed");
+            }
+        }
+        
         // TODO recheck implementation
         // TODO this could throw several StatusExceptions like e.g. SYNC_STATUS_OBJECTNOTFOUND, SYNC_STATUS_SYNCCANNOTBECOMPLETED
+        // TODO return flag change, but flag is only "read" at the moment
         return false;
     }
 
@@ -1313,35 +1352,7 @@ class BackendIMAP extends BackendDiff {
 
         return $status;
     }
-
-    /**
-     * Changes the 'star' flag of a message on disk
-     *
-     * @param string        $folderid       id of the folder
-     * @param string        $id             id of the message
-     * @param int           $flags          read flag of the message
-     *
-     * @access public
-     * @return boolean                      status of the operation
-     * @throws StatusException              could throw specific SYNC_STATUS_* exceptions
-     */    
-    public function SetImportantFlag($folderid, $id, $flags) {
-        ZLog::Write(LOGLEVEL_DEBUG, sprintf("BackendIMAP->SetImportantFlag('%s','%s','%s')", $folderid, $id, $flags));
-        $folderImapid = $this->getImapIdFromFolderId($folderid);
-
-        $this->imap_reopenFolder($folderImapid);
-
-        if ($flags == 0) {
-            // set as "Unflagged" (no starred)
-            $status = @imap_clearflag_full ( $this->mbox, $id, "\\Flagged", ST_UID);
-        } else {
-            // set as "Flagged" (starred)
-            $status = @imap_setflag_full($this->mbox, $id, "\\Flagged",ST_UID);
-        }
-
-        return $status;
-    }
-        
+       
 
     /**
      * Called when the user has requested to delete (really delete) a message
