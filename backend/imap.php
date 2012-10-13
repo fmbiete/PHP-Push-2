@@ -933,18 +933,29 @@ class BackendIMAP extends BackendDiff {
             }
 
             // cut of deleted messages
-            if (array_key_exists( "deleted", $vars) && $overview->deleted)
+            if (array_key_exists("deleted", $vars) && $overview->deleted)
                 continue;
 
-            if (array_key_exists( "uid", $vars)) {
+            if (array_key_exists("uid", $vars)) {
                 $message = array();
                 $message["mod"] = $date;
                 $message["id"] = $overview->uid;
-                // 'seen' aka 'read' is the only flag we want to know about
-                $message["flags"] = 0;
-
-                if(array_key_exists( "seen", $vars) && $overview->seen)
+                
+                // 'seen' aka 'read'
+                if(array_key_exists("seen", $vars) && $overview->seen) {
                     $message["flags"] = 1;
+                }
+                else {
+                    $message["flags"] = 0;
+                }
+                
+                // 'flagged' aka 'FollowUp' aka 'starred'
+                if (array_key_exists("flagged", $vars) && $overview->flagged) {
+                    $message["flagged"] = 1;
+                }
+                else {
+                    $message["flagged"] = 0;
+                }                
 
                 array_push($messages, $message);
             }
@@ -1089,17 +1100,20 @@ class BackendIMAP extends BackendDiff {
             }
 
             // Language Code Page ID: http://msdn.microsoft.com/en-us/library/windows/desktop/dd317756%28v=vs.85%29.aspx
-            $output->internetcpid = 65001; // UTF-8
+            $output->internetcpid = INTERNET_CPID_UTF8;
             if (Request::GetProtocolVersion() >= 12.0) {
                 $output->contentclass = "urn:content-classes:message";
 
+                $output->flag = new SyncMailFlags();
                 if (isset($stat["flagged"]) && $stat["flagged"]) {
-                    $output->flag = new SyncMailFlags();
                     //flagstatus 0: clear, 1: complete, 2: active
                     $output->flag->flagstatus = SYNC_FLAGSTATUS_ACTIVE;
                     //flagtype: for follow up
                     $output->flag->flagtype = "FollowUp";                    
-                }               
+                }
+                else {
+                    $output->flag->flagstatus = SYNC_FLAGSTATUS_CLEAR;
+                }
             }
 
             $Mail_RFC822 = new Mail_RFC822();
@@ -1610,33 +1624,6 @@ class BackendIMAP extends BackendDiff {
         return SYNC_BODYPREFERENCE_PLAIN;
     }
     
-    /**
-     * Set the body type for an ASV_12+ message
-     *
-     * @param string        $message        message subtype
-     * @param string        &$output        output reference
-     *
-     * @access protected
-     * @return
-     */
-    protected function getBodyType($message, &$output) {
-        if (Request::GetProtocolVersion() >= 12.0) {
-            //TODO: get MIME type
-            //TODO: check client preferences
-            $this->getBodyRecursive($message, "html", $body);
-            if (isset($body) && $body != "") {
-                ZLog::Write(LOGLEVEL_DEBUG, sprintf("BackendIMAP->getBodyType HTML (%s)", substr($body, 0, 20)));
-                $output->asbody->type = SYNC_BODYPREFERENCE_HTML;
-                $output->nativebodytype = SYNC_BODYPREFERENCE_HTML;
-                $output->asbody->data = $body;
-            } else {
-                ZLog::Write(LOGLEVEL_DEBUG, "BackendIMAP->getBodyType PLAIN");
-                $output->nativebodytype = SYNC_BODYPREFERENCE_PLAIN;
-                $output->asbody->type = SYNC_BODYPREFERENCE_PLAIN;
-            }
-        }
-    }
-
     /**
      * Returns the serverdelimiter for folder parsing
      *
