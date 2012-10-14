@@ -111,7 +111,7 @@ class carddav_backend
 	 *
 	 * @constant	string
 	 */
-	const USERAGENT = 'CardDAV PHP/';
+	const USERAGENT = 'CardDAV PHP';
 
 	/**
 	 * CardDAV server url
@@ -334,6 +334,8 @@ class carddav_backend
 
 		switch ($result['http_code'])
 		{
+			case 404:
+				$result = $this->query($this->url . $vcard_id, 'GET');
 			case 200:
 			case 207:
 				return $result['response'];
@@ -521,57 +523,78 @@ class carddav_backend
 		$simplified_xml->setIndent(4);
 
 		$simplified_xml->startDocument('1.0', 'utf-8');
-			$simplified_xml->startElement('response');
+		$simplified_xml->startElement('response');
 
-				if (!empty($xml->response))
+			if (!empty($xml->response))
+			{
+				foreach ($xml->response as $response)
 				{
-					foreach ($xml->response as $response)
+					if (preg_match('/vcard/', $response->propstat->prop->getcontenttype) || preg_match('/vcf/', $response->href))
 					{
-						if (preg_match('/vcard/', $response->propstat->prop->getcontenttype) || preg_match('/vcf/', $response->href))
+						$id = basename($response->href);
+						$id = str_replace('.vcf', null, $id);
+
+						if (!empty($id))
 						{
-							$id = basename($response->href);
-							$id = str_replace('.vcf', null, $id);
-
-							if (!empty($id))
-							{
-								$simplified_xml->startElement('element');
-									$simplified_xml->writeElement('id', $id);
-									$simplified_xml->writeElement('etag', str_replace('"', null, $response->propstat->prop->getetag));
-									$simplified_xml->writeElement('last_modified', $response->propstat->prop->getlastmodified);
-
-									if ($include_vcards === true)
-									{
-										$simplified_xml->writeElement('vcard', $this->get_vcard($id));
-									}
-								$simplified_xml->endElement();
-							}
-						}
-						else if (preg_match('/unix-directory/', $response->propstat->prop->getcontenttype))
-						{
-							if (isset($response->propstat->prop->href))
-							{
-								$href = $response->propstat->prop->href;
-							}
-							else if (isset($response->href))
-							{
-								$href = $response->href;
-							}
-							else
-							{
-								$href = null;
-							}
-
-							$url = str_replace($this->url_parts['path'], null, $this->url) . $href;
-							$simplified_xml->startElement('addressbook_element');
-								$simplified_xml->writeElement('display_name', $response->propstat->prop->displayname);
-								$simplified_xml->writeElement('url', $url);
+							$simplified_xml->startElement('element');
+								$simplified_xml->writeElement('id', $id);
+								$simplified_xml->writeElement('etag', str_replace('"', null, $response->propstat->prop->getetag));
 								$simplified_xml->writeElement('last_modified', $response->propstat->prop->getlastmodified);
+
+								if ($include_vcards === true)
+								{
+									$simplified_xml->writeElement('vcard', $this->get_vcard($id));
+								}
 							$simplified_xml->endElement();
 						}
 					}
-				}
+					else if (preg_match('/unix-directory/', $response->propstat->prop->getcontenttype))
+					{
+						if (isset($response->propstat->prop->href))
+						{
+							$href = $response->propstat->prop->href;
+						}
+						else if (isset($response->href))
+						{
+							$href = $response->href;
+						}
+						else
+						{
+							$href = null;
+						}
 
-			$simplified_xml->endElement();
+						$url = str_replace($this->url_parts['path'], null, $this->url) . $href;
+						$simplified_xml->startElement('addressbook_element');
+						$simplified_xml->writeElement('display_name', $response->propstat->prop->displayname);
+						$simplified_xml->writeElement('url', $url);
+						$simplified_xml->writeElement('last_modified', $response->propstat->prop->getlastmodified);
+						$simplified_xml->endElement();
+					}
+					else if ($response->propstat->prop->resourcetype->collection and $response->propstat->prop->resourcetype->caraddressbook)
+					{
+							if (isset($response->propstat->prop->href))
+							{
+									$href = $response->propstat->prop->href;
+							}
+							else if (isset($response->href))
+							{
+									$href = $response->href;
+							}
+							else
+							{
+									$href = null;
+							}
+							$url = str_replace($this->url_parts['path'], null, $this->url) . $href;
+							$simplified_xml->startElement('addressbook_element');
+							$name = pathinfo($this->url_parts['path']);
+							$simplified_xml->writeElement('display_name', $name['filename']);
+							$simplified_xml->writeElement('url', $url);
+							$simplified_xml->endElement();
+					}
+				}
+			}
+
+		$simplified_xml->endElement();
 		$simplified_xml->endDocument();
 
 		return $simplified_xml->outputMemory();

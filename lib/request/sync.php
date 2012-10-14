@@ -436,9 +436,9 @@ class Sync extends RequestProcessor {
                             }
 
                             if ($actiondata["fetchids"])
-                                self::$topCollector->AnnounceInformation(sprintf("Fetching %d", $nchanges),true);
+                                self::$topCollector->AnnounceInformation(sprintf("Fetching %d", $nchanges));
                             else
-                                self::$topCollector->AnnounceInformation(sprintf("Incoming %d", $nchanges),($nchanges>0)?true:false);
+                                self::$topCollector->AnnounceInformation(sprintf("Incoming %d", $nchanges));
 
                             if(!self::$decoder->getElementEndTag()) // end add/change/delete/move
                                 return false;
@@ -446,6 +446,9 @@ class Sync extends RequestProcessor {
 
                         if ($status == SYNC_STATUS_SUCCESS && $this->importer !== false) {
                             ZLog::Write(LOGLEVEL_INFO, sprintf("Processed '%d' incoming changes", $nchanges));
+                            if (!$actiondata["fetchids"])
+                                self::$topCollector->AnnounceInformation(sprintf("%d incoming", $nchanges), true);
+
                             try {
                                 // Save the updated state, which is used for the exporter later
                                 $sc->AddParameter($spa, "state", $this->importer->GetState());
@@ -589,8 +592,13 @@ class Sync extends RequestProcessor {
                     }
                 }
                 catch (StatusException $stex) {
-                   $status = SYNC_STATUS_FOLDERHIERARCHYCHANGED;
-                   self::$topCollector->AnnounceInformation(sprintf("StatusException code: %d", $status), true);
+                    if ($stex->getCode() == SyncCollections::OBSOLETE_CONNECTION) {
+                        $status = SYNC_COMMONSTATUS_SYNCSTATEVERSIONINVALID;
+                    }
+                    else {
+                        $status = SYNC_STATUS_FOLDERHIERARCHYCHANGED;
+                        self::$topCollector->AnnounceInformation(sprintf("StatusException code: %d", $status), true);
+                    }
                 }
 
                 // in case of an empty sync with no changes, we can reply with an empty response

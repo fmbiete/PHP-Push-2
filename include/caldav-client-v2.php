@@ -8,6 +8,7 @@
 * @author Andrew McMillan <andrew@mcmillan.net.nz>
 * @copyright Andrew McMillan
 * @license   http://www.gnu.org/licenses/lgpl-3.0.txt  GNU LGPL version 3 or later
+* Update xbgmsharp <xbgmsharp@gmail.com>
 */
 
 require_once('XMLDocument.php');
@@ -17,12 +18,13 @@ require_once('XMLDocument.php');
 * @package awl
 */
 class CalendarInfo {
-  public $url, $displayname, $getctag;
+  public $url, $displayname, $getctag, $id;
 
-  function __construct( $url, $displayname = null, $getctag = null ) {
+  function __construct( $url, $displayname = null, $getctag = null, $id = null ) {
     $this->url = $url;
     $this->displayname = $displayname;
     $this->getctag = $getctag;
+    $this->id = $id;
   }
 
   function __toString() {
@@ -42,7 +44,7 @@ class CalDAVClient {
   *
   * @var string
   */
-  protected $base_url, $user, $pass, $entry, $protocol, $server, $port;
+  protected $base_url, $user, $pass, $entry, $protocol, $server, $port, $http_auth;
 
   /**
   * The principal-URL we're using
@@ -96,6 +98,9 @@ class CalDAVClient {
     $this->user = $user;
     $this->pass = $pass;
     $this->headers = array();
+    $this->http_auth = array(
+        'method' => 'basic'
+    );
 
     if ( preg_match( '#^(https?)://([a-z0-9.-]+)(:([0-9]+))?(/.*)$#', $base_url, $matches ) ) {
       $this->server = $matches[2];
@@ -196,11 +201,11 @@ class CalDAVClient {
       xml_parser_set_option ( $parser, XML_OPTION_CASE_FOLDING, 0 );
 
       if ( xml_parse_into_struct( $parser, $this->xmlResponse, $this->xmlnodes, $this->xmltags ) === 0 ) {
-        printf( "XML parsing error: %s - %s\n", xml_get_error_code($parser), xml_error_string(xml_get_error_code($parser)) );
+        if ( $this->debug ) printf( "XML parsing error: %s - %s\n", xml_get_error_code($parser), xml_error_string(xml_get_error_code($parser)) );
 //        debug_print_backtrace();
 //        echo "\nNodes array............................................................\n"; print_r( $this->xmlnodes );
 //        echo "\nTags array............................................................\n";  print_r( $this->xmltags );
-        printf( "\nXML Reponse:\n%s\n", $this->xmlResponse );
+        if ( $this->debug ) printf( "\nXML Reponse:\n%s\n", $this->xmlResponse );
       }
 
       xml_parser_free($parser);
@@ -255,7 +260,7 @@ class CalDAVClient {
   *
   * @return string The content of the response from the server
   */
-  function DoRequest( $url = null ) {
+  function DoRequest( $url = null, $switch_auth = false ) {
     if(!defined("_FSOCK_TIMEOUT")){ define("_FSOCK_TIMEOUT", 10); }
     $headers = array();
 
@@ -272,7 +277,16 @@ class CalDAVClient {
       $url = str_replace(rawurlencode(','),',',$url);
     }
     $headers[] = $this->requestMethod." ". $url . " HTTP/1.1";
-    $headers[] = "Authorization: Basic ".base64_encode($this->user .":". $this->pass );
+    if( 'basic' != $this->http_auth['method'] && !isset( $this->http_auth['stale'] )) {
+	// then it's digest...
+	$digest_A1 = md5( $this->user .':' . $this->http_auth['realm'] . ':' . $this->pass );
+	$digest_A2 = md5( $this->requestMethod.':'.$url );
+	$digest = 'Authorization: Digest username="'.$this->user.'", realm="'.$this->http_auth['realm'].'", nonce="'.$this->http_auth['nonce'].'", uri="'.$url.'", algorithm=MD5, response="'.md5($digest_A1.':'.$this->http_auth['nonce'].':'.$digest_A2).'"';
+	// todo: loop through challenges
+	$headers[] = $digest;
+    } else {
+	$headers[] = "Authorization: Basic ".base64_encode($this->user .":". $this->pass );
+    }
     $headers[] = "Host: ".$this->server .":".$this->port;
 
     if ( !isset($this->headers['content-type']) ) $this->headers['content-type'] = "Content-type: text/plain";
@@ -295,6 +309,40 @@ class CalDAVClient {
     fclose($fip);
 
     list( $this->httpResponseHeaders, $this->httpResponseBody ) = preg_split( '{\r?\n\r?\n}s', $response, 2 );
+    $header_lines = preg_split( '{\r?\n}', $this->httpResponseHeaders );
+    if( count( preg_grep( '{^HTTP/1.1 3\d\d.*}i', $header_lines ) ) > 0 && count( $matches = preg_grep( '{^Location: (.*)}i', $header_lines ) ) > 0 ) {
+        // todo: cache move?
+        return $this->DoRequest( substr( end( $matches ), 10 ), $switch_auth );
+    }
+
+    $can_switch_auth = false;
+    if( true != $switch_auth && count( preg_grep( '{^HTTP/1.1 401 Unauthorized.*}i', $header_lines ) ) > 0 && 'basic' == $this->http_auth['method'] ) {
+        $can_switch_auth = true;
+    }
+     if( count( $digest = preg_grep( '{^WWW-Authenticate: digest.+}', $header_lines ) ) > 0 ) {
+        $digest_string = end( $digest );
+        $this->http_auth['method'] = 'digest';
+        $this->http_auth['challenge'] = array();
+
+        foreach( array( 'realm', 'domain', 'nonce', 'stale' ) as $c ) {
+            if( preg_match( '{.+?'.$c.'="([^"]+)".*?}', $digest_string, $matches ) ) {
+                $this->http_auth[$c] = $matches[1];
+            }
+        }
+        foreach( array( 'opaque', 'algorithm', 'qop-options', 'auth-param' ) as $c ) {
+            if( preg_match( '{.+?'.$c.'="([^"]+)".*?}', $digest_string, $matches ) ) {
+                $this->http_auth['challenge'][$c] = $matches[1];
+            }
+        }
+        if( isset( $this->http_auth['challenge']['qop-options'] ) ) {
+            if( preg_match( '{.+?qop-value="([^"]+)".*?}', $digest_string, $matches ) ) {
+                $this->http_auth['challenge'][$c] = $matches[1];
+            }
+        }
+        if( $can_switch_auth ) {
+		return $this->DoRequest( $url, true );
+        }
+    }
     if ( preg_match( '{Transfer-Encoding: chunked}i', $this->httpResponseHeaders ) ) $this->Unchunk();
     if ( preg_match('/HTTP\/\d\.\d (\d{3})/', $this->httpResponseHeaders, $status) )
       $this->httpResponseCode = intval($status[1]);
@@ -414,7 +462,7 @@ class CalDAVClient {
     if ( $etag != null ) {
       $this->SetMatch( ($etag != '*'), $etag );
     }
-    $this->SetContentType('text/calendar; encoding="utf-8"');
+    $this->SetContentType('text/calendar; charset=utf-8');
     $this->DoRequest($url);
 
     $etag = null;
@@ -620,7 +668,7 @@ class CalDAVClient {
   * @param string $url The URL to find the principal-URL from
   */
   function FindPrincipal( $url=null ) {
-    $xml = $this->DoPROPFINDRequest( $url, array('resourcetype', 'current-user-principal', 'owner', 'principal-URL',
+    $xml = $this->DoPROPFINDRequest( $this->base_url, array('resourcetype', 'current-user-principal', 'owner', 'principal-URL',
                                   'urn:ietf:params:xml:ns:caldav:calendar-home-set'), 1);
 
     $principal_url = $this->HrefForProp('DAV::principal');
@@ -704,6 +752,7 @@ class CalDAVClient {
               break;
           }
         }
+	$calendar->id = rtrim(str_replace($this->calendar_home_set[0], "", $calendar->url), "/");
         $calendars[] = $calendar;
       }
     }
@@ -717,6 +766,10 @@ class CalDAVClient {
   */
   function GetCalendarDetails( $url = null ) {
     if ( isset($url) ) $this->SetCalendar($url);
+
+    if ( !isset($this->calendar_home_set[0]) ) {
+      $this->FindCalendarHome();
+    }
 
     $calendar_properties = array( 'resourcetype', 'displayname', 'http://calendarserver.org/ns/:getctag', 'urn:ietf:params:xml:ns:caldav:calendar-timezone', 'supported-report-set' );
     $this->DoPROPFINDRequest( $this->calendar_url, $calendar_properties, 0);
@@ -735,6 +788,7 @@ class CalDAVClient {
         printf( "Calendar property '%s' has no text content\n", $v['tag'] );
       }*/
     }
+    $calendar->id = rtrim(str_replace($this->calendar_home_set[0], "", $calendar->url), "/");
 
     return $calendar;
   }
@@ -873,7 +927,7 @@ EOXML;
   *
   * @return array An array of the relative URLs, etags, and events, returned from DoCalendarQuery() @see DoCalendarQuery()
   */
-  function GetEvents( $start = null, $finish = null, $relative_url = '' ) {
+  function GetEvents( $start = null, $finish = null, $relative_url = null ) {
     $filter = "";
     if ( isset($start) && isset($finish) )
         $range = "<C:time-range start=\"$start\" end=\"$finish\"/>";
@@ -909,7 +963,7 @@ EOFILTER;
   *
   * @return array An array of the relative URLs, etags, and events, returned from DoCalendarQuery() @see DoCalendarQuery()
   */
-  function GetTodos( $start, $finish, $completed = false, $cancelled = false, $relative_url = "" ) {
+  function GetTodos( $start, $finish, $completed = false, $cancelled = false, $relative_url = null ) {
 
     if ( $start && $finish ) {
 $time_range = <<<EOTIME
@@ -949,7 +1003,7 @@ EOFILTER;
   *
   * @return array An array of the relative URL, etag, and calendar data returned from DoCalendarQuery() @see DoCalendarQuery()
   */
-  function GetEntryByUid( $uid, $relative_url = '', $component_type = 'VEVENT' ) {
+  function GetEntryByUid( $uid, $relative_url = null, $component_type = 'VEVENT' ) {
     $filter = "";
     if ( $uid ) {
       $filter = <<<EOFILTER

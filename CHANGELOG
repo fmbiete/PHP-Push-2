@@ -1,6 +1,11 @@
 2012-10-12 <fmbiete at gmail dot com>
     BackendIMAP
     * Recover only subscribed folders
+    Z-Push
+    * Rebased master to dupondje + Z-Push 2.0.4
+    * Rebased imap_asv12 to master
+    * Rebased developing to master
+    * Applied changes until commit 7e3d6025fccd43a97b8a1e7592a6737c8a2ace93 (https://github.com/svn2github/Z-Push) or SVN Trunk Rev 1498
     
 2012-10-12 <fmbiete at gmail dot com>
     BackendIMAP - AES 12+

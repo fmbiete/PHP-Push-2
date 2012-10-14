@@ -6,7 +6,7 @@
 *
 * Created   :   14.02.2011
 *
-* Copyright 2007 - 2011 Zarafa Deutschland GmbH
+* Copyright 2007 - 2012 Zarafa Deutschland GmbH
 *
 * This program is free software: you can redistribute it and/or modify
 * it under the terms of the GNU Affero General Public License, version 3,
@@ -2231,7 +2231,11 @@ class MAPIProvider {
 
             $this->setMessageBodyForType($mapimessage, $bpReturnType, $message);
             //only set the truncation size data if device set it in request
-            if ($bpo->GetTruncationSize() != false && $bpReturnType != SYNC_BODYPREFERENCE_MIME && $message->asbody->estimatedDataSize > $bpo->GetTruncationSize()) {
+            if (    $bpo->GetTruncationSize() != false &&
+                    $bpReturnType != SYNC_BODYPREFERENCE_MIME &&
+                    $message->asbody->estimatedDataSize > $bpo->GetTruncationSize() &&
+                    $contentparameters->GetTruncation() != SYNC_TRUNCATION_ALL // do not truncate message if the whole is requested, e.g. on fetch
+                ) {
                 $message->asbody->data = Utils::Utf8_truncate($message->asbody->data, $bpo->GetTruncationSize());
                 $message->asbody->truncated = 1;
 
@@ -2280,7 +2284,7 @@ class MAPIProvider {
             ($messageprops[PR_BODY]             == MAPI_E_NOT_FOUND) &&
             ($messageprops[PR_RTF_COMPRESSED]   == MAPI_E_NOT_FOUND) &&
             ($messageprops[PR_HTML]             == MAPI_E_NOT_FOUND))
-            return SYNC_BODYPREFERENCE_UNDEFINED;
+            return SYNC_BODYPREFERENCE_PLAIN;
         elseif ( // 2
             ($messageprops[PR_BODY]             == MAPI_E_NOT_ENOUGH_MEMORY) &&
             ($messageprops[PR_RTF_COMPRESSED]   == MAPI_E_NOT_FOUND) &&
