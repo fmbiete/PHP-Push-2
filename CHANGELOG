@@ -1,4 +1,8 @@
 2012-10-12 <fmbiete at gmail dot com>
+    BackendIMAP
+    * Recover only subscribed folders
+    
+2012-10-12 <fmbiete at gmail dot com>
     BackendIMAP - AES 12+
     * Flag support: messages can be starred in the client, and the change is reflexed in the server
     

@@ -515,7 +515,7 @@ class BackendIMAP extends BackendDiff {
         // TODO this could be retrieved from the DeviceFolderCache
         if ($this->wasteID == false) {
             //try to get the waste basket without doing complete hierarchy sync
-            $wastebaskt = @imap_getmailboxes($this->mbox, $this->server, "Trash");
+            $wastebaskt = @imap_getsubscribed($this->mbox, $this->server, "Trash");
             if (isset($wastebaskt[0])) {
                 $this->wasteID = $this->convertImapId(substr($wastebaskt[0]->name, strlen($this->server)));
                 return $this->wasteID;
@@ -687,7 +687,7 @@ class BackendIMAP extends BackendDiff {
     public function GetFolderList() {
         $folders = array();
 
-        $list = @imap_getmailboxes($this->mbox, $this->server, "*");
+        $list = @imap_getsubscribed($this->mbox, $this->server, "*");
         if (is_array($list)) {
             // reverse list to obtain folders in right order
             $list = array_reverse($list);
@@ -1631,7 +1631,7 @@ class BackendIMAP extends BackendDiff {
      * @return string       delimiter
      */
     protected function getServerDelimiter() {
-        $list = @imap_getmailboxes($this->mbox, $this->server, "*");
+        $list = @imap_getsubscribed($this->mbox, $this->server, "*");
         if (is_array($list)) {
             $val = $list[0];
 
