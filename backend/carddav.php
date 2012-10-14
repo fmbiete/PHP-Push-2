@@ -22,7 +22,7 @@ include_once('include/vCard.php');
 
 class BackendCardDAV extends BackendDiff {
 	// SOGoSync version
-	const SOGOSYNC_VERSION = '0.4.0';
+	const SOGOSYNC_VERSION = '0.5.0';
 	// SOGoSync vcard Prodid
 	const SOGOSYNC_PRODID = 'SOGoSync';
 
