@@ -558,7 +558,6 @@ class BackendIMAP extends BackendDiff {
         $mail = @imap_fetchheader($this->mbox, $id, FT_UID) . @imap_body($this->mbox, $id, FT_PEEK | FT_UID);
 
         $mobj = new Mail_mimeDecode($mail);
-        //$message = $mobj->decode(array('decode_headers' => true, 'decode_bodies' => true, 'include_bodies' => true, 'charset' => 'utf-8'));
         $message = $mobj->decode(array('decode_headers' => true, 'decode_bodies' => false, 'include_bodies' => true, 'charset' => 'utf-8'));
 
         //trying parts
@@ -579,9 +578,7 @@ class BackendIMAP extends BackendDiff {
         unset($mobj);
         unset($mail);
 
-        include_once('include/stringstreamwrapper.php');
         $attachment = new SyncItemOperationsAttachment();
-        //$attachment->data = StringStreamWrapper::Open($mparts[$part]->body);
         $attachment->data = $mparts[$part]->body;
         if (isset($mparts[$part]->ctype_primary) && isset($mparts[$part]->ctype_secondary))
             $attachment->contenttype = $mparts[$part]->ctype_primary .'/'.$mparts[$part]->ctype_secondary;
