@@ -43,19 +43,19 @@ class BackendCardDAV extends BackendDiff {
 		}
 
 		$url = str_replace('%u', $username, CARDDAV_SERVER . ':' . CARDDAV_PORT . CARDDAV_PATH);
-		ZLog::Write(LOGLEVEL_INFO, sprintf("BackendCardDAV->Logon('%s')", $url));
+		ZLog::Write(LOGLEVEL_DEBUG, sprintf("BackendCardDAV->Logon('%s')", $url));
 		$this->_carddav = new carddav_backend($url);
 		$this->_carddav->set_auth($username, $password);
 
 		if ($this->_carddav->check_connection())
 		{
-			ZLog::Write(LOGLEVEL_INFO, sprintf("BackendCardDAV->Logon(): User '%s' is authenticated on CardDAV", $username));
+			ZLog::Write(LOGLEVEL_DEBUG, sprintf("BackendCardDAV->Logon(): User '%s' is authenticated on CardDAV", $username));
 			$this->url = $url;
 			return true;
 		}
 		else
 		{
-			ZLog::Write(LOGLEVEL_INFO, sprintf("BackendCardDAV->Logon(): User '%s' is not authenticated on CardDAV", $username));
+			ZLog::Write(LOGLEVEL_WARN, sprintf("BackendCardDAV->Logon(): User '%s' is not authenticated on CardDAV", $username));
 			return false;
 		}
 	}
