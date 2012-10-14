@@ -331,7 +331,7 @@ abstract class BackendDiff extends Backend {
      * @return boolean                      status of the operation
      * @throws StatusException              could throw specific SYNC_STATUS_* exceptions
      */
-    public abstract function SetReadFlag($folderid, $id, $flags);   
+    public abstract function SetReadFlag($folderid, $id, $flags);
 
     /**
      * Called when the user has requested to delete (really delete) a message. Usually

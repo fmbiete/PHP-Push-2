@@ -167,7 +167,6 @@ class Mail_mimeDecode
      */
     var $_rfc822_bodies;
 
-
     /**
      * Constructor.
      *
