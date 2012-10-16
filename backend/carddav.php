@@ -416,7 +416,7 @@ class BackendCardDAV extends BackendDiff {
 
 		foreach ($mapping as $vcard_attribute => $ms_attribute)
 		{
-			ZLog::Write(LOGLEVEL_DEBUG, sprintf("BackendCardDAV->_ParseVCardToAS(vCard[%s] => ms[%s])", $vcard_attribute, $ms_attribute));
+			//ZLog::Write(LOGLEVEL_DEBUG, sprintf("BackendCardDAV->_ParseVCardToAS(vCard[%s] => ms[%s])", $vcard_attribute, $ms_attribute));
 			if (empty($card[$vcard_attribute]))
 			{
 				continue;

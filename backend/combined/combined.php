@@ -408,5 +408,15 @@ class BackendCombined extends Backend {
             return false;
         return substr($folderid,0,$pos);
     }
+
+    /**
+     * Indicates which AS version is supported by the backend.
+     *
+     * @access public
+     * @return string       AS version constant
+     */
+    public function GetSupportedASVersion() {
+        return ZPush::ASV_14;
+    }
 }
 ?>
