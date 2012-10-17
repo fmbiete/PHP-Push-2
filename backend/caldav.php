@@ -307,6 +307,21 @@ class BackendCalDAV extends BackendDiff {
 		return false;
 	}
 
+    /**
+     * Changes the 'star' flag of a message on disk
+     *
+     * @param string        $folderid       id of the folder
+     * @param string        $id             id of the message
+     * @param int           $flags          star flag of the message
+     *
+     * @access public
+     * @return boolean                      status of the operation
+     * @throws StatusException              could throw specific SYNC_STATUS_* exceptions
+     */
+    public function SetStarFlag($folderid, $id, $flags) {
+        return false;
+    }
+
 	/**
 	 * Delete a message from the CalDAV server.
 	 * @see BackendDiff::DeleteMessage()

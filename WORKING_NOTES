@@ -1,10 +1,1 @@
-
-$MC = imap_check($mbox);
-
-// Fetch an overview for all messages in INBOX
-$result = imap_fetch_overview($mbox,"1:{$MC->Nmsgs}",0);
-foreach ($result as $overview) {
-    if (isset($result->flagged)) {
-        compare with cache for that message
-    }
-}
+"flags" -> "read"

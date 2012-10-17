@@ -1,3 +1,17 @@
+2012-10-17 <fmbiete at gmail dot com>
+    IImportChanges
+    * Added new function ImportMessageStarFlag
+    BackendIMAP
+    * Star a message in device/server is supported
+
+2012-10-16 <fmbiete at gmail dot com>
+    Core
+    * Attachment could be a streamer or a string. IMAP backend can return a string, since I already have it in Base64 string
+    BackendDiff
+    * Added new abstract function SetStarFlag
+    Diff backends (kolab, caldav, carddav, maildir, vcarddir, imap)
+    * Implemented dummy SetStarFlag
+
 2012-10-12 <fmbiete at gmail dot com>
     BackendIMAP
     * Recover only subscribed folders

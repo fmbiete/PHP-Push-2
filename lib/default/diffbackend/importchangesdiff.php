@@ -100,6 +100,7 @@ class ImportChangesDiff extends DiffState implements IImportChanges {
             $change["mod"] = 0; // dummy, will be updated later if the change succeeds
             $change["parent"] = $this->folderid;
             $change["flags"] = (isset($message->read)) ? $message->read : 0;
+            $change["star"] = (isset($message->flag) && isset($message->flag->flagstatus)) ? $message->flag->flagstatus : 0;
             $this->updateState("change", $change);
 
             if($conflict && $this->flags == SYNC_CONFLICT_OVERWRITE_PIM)
@@ -185,6 +186,35 @@ class ImportChangesDiff extends DiffState implements IImportChanges {
     }
 
     /**
+     * Imports a change in 'star' flag
+     * This can never conflict
+     *
+     * @param string        $id
+     * @param int           $flags - flagged/unflagged
+     *
+     * @access public
+     * @return boolean
+     * @throws StatusException
+     */
+    public function ImportMessageStarFlag($id, $flags) {
+        //do nothing if it is a dummy folder
+        if ($this->folderid == SYNC_FOLDER_TYPE_DUMMY)
+            throw new StatusException(sprintf("ImportChangesDiff->ImportMessageStarFlag('%s','%s'): can not be done on a dummy folder", $id, $flags), SYNC_STATUS_SYNCCANNOTBECOMPLETED);
+
+        // Update client state
+        $change = array();
+        $change["id"] = $id;
+        $change["star"] = $flags;
+        $this->updateState("star", $change);
+
+        $stat = $this->backend->SetStarFlag($this->folderid, $id, $flags);
+        if (!$stat)
+            throw new StatusException(sprintf("ImportChangesDiff->ImportMessageStarFlag('%s','%s'): Error, unable retrieve message from backend", $id, $flags), SYNC_STATUS_OBJECTNOTFOUND);
+
+        return true;
+    }
+
+    /**
      * Imports a move of a message. This occurs when a user moves an item to another folder
      *
      * @param string        $id
@@ -228,6 +258,7 @@ class ImportChangesDiff extends DiffState implements IImportChanges {
             $change["mod"] = $displayname;
             $change["parent"] = $parent;
             $change["flags"] = 0;
+            $change["star"] = 0;
             $this->updateState("change", $change);
         }
 

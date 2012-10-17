@@ -664,9 +664,6 @@ class BackendIMAP extends BackendDiff {
                         $notifications[] = $this->getFolderIdFromImapId($imapid);
                         $this->sinkstates[$imapid] = $newstate;
                     }
-                    else {
-                        //TODO: we could have flagged a message
-                    }
                 }
             }
 
@@ -956,10 +953,10 @@ class BackendIMAP extends BackendDiff {
                 
                 // 'flagged' aka 'FollowUp' aka 'starred'
                 if (array_key_exists("flagged", $vars) && $overview->flagged) {
-                    $message["flagged"] = 1;
+                    $message["star"] = 1;
                 }
                 else {
-                    $message["flagged"] = 0;
+                    $message["star"] = 0;
                 }                
 
                 array_push($messages, $message);
@@ -1110,7 +1107,7 @@ class BackendIMAP extends BackendDiff {
                 $output->contentclass = "urn:content-classes:message";
 
                 $output->flag = new SyncMailFlags();
-                if (isset($stat["flagged"]) && $stat["flagged"]) {
+                if (isset($stat["star"]) && $stat["star"]) {
                     //flagstatus 0: clear, 1: complete, 2: active
                     $output->flag->flagstatus = SYNC_FLAGSTATUS_ACTIVE;
                     //flagtype: for follow up
@@ -1284,10 +1281,10 @@ class BackendIMAP extends BackendDiff {
 
         // 'flagged' aka 'FollowUp' aka 'starred'
         if (array_key_exists("flagged", $vars) && $overview[0]->flagged) {
-            $entry["flagged"] = 1;
+            $entry["star"] = 1;
         }
         else {
-            $entry["flagged"] = 0;
+            $entry["star"] = 0;
         }
 
         return $entry;
@@ -1337,11 +1334,11 @@ class BackendIMAP extends BackendDiff {
                 ZLog::Write(LOGLEVEL_DEBUG, "Flagged failed");
             }
         }
-        
-        // TODO recheck implementation
-        // TODO this could throw several StatusExceptions like e.g. SYNC_STATUS_OBJECTNOTFOUND, SYNC_STATUS_SYNCCANNOTBECOMPLETED
-        // TODO return flag change, but flag is only "read" at the moment
-        return false;
+
+        //TODO: maybe this is unnecessary
+        $stats = $this->StatMessage($folderid, $id);
+
+        return $stats;
     }
 
     /**
@@ -1371,7 +1368,34 @@ class BackendIMAP extends BackendDiff {
 
         return $status;
     }
-       
+
+    /**
+     * Changes the 'star' flag of a message on disk
+     *
+     * @param string        $folderid       id of the folder
+     * @param string        $id             id of the message
+     * @param int           $flags          read flag of the message
+     *
+     * @access public
+     * @return boolean                      status of the operation
+     * @throws StatusException              could throw specific SYNC_STATUS_* exceptions
+     */
+    public function SetStarFlag($folderid, $id, $flags) {
+        ZLog::Write(LOGLEVEL_DEBUG, sprintf("BackendIMAP->SetStarFlag('%s','%s','%s')", $folderid, $id, $flags));
+        $folderImapid = $this->getImapIdFromFolderId($folderid);
+
+        $this->imap_reopenFolder($folderImapid);
+
+        if ($flags == 0) {
+            // set as "UnFlagged" (unstarred)
+            $status = @imap_clearflag_full ( $this->mbox, $id, "\\Flagged", ST_UID);
+        } else {
+            // set as "Flagged" (starred)
+            $status = @imap_setflag_full($this->mbox, $id, "\\Flagged",ST_UID);
+        }
+
+        return $status;
+    }  
 
     /**
      * Called when the user has requested to delete (really delete) a message

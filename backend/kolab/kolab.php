@@ -1384,6 +1384,22 @@
             return $status;
         }
 
+
+        /**
+        * Changes the 'star' flag of a message on disk
+        *
+        * @param string        $folderid       id of the folder
+        * @param string        $id             id of the message
+        * @param int           $flags          star flag of the message
+        *
+        * @access public
+        * @return boolean                      status of the operation
+        * @throws StatusException              could throw specific SYNC_STATUS_* exceptions
+        */
+        function SetStarFlag($folderid, $id, $flags) {
+            return false;
+        }
+
         /* This function is called when a message has been changed on the PDA. You should parse the new
         * message here and save the changes to disk. The return value must be whatever would be returned
         * from StatMessage() after the message has been saved. This means that both the 'flags' and the 'mod'
