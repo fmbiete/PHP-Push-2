@@ -1335,10 +1335,7 @@ class BackendIMAP extends BackendDiff {
             }
         }
 
-        //TODO: maybe this is unnecessary
-        $stats = $this->StatMessage($folderid, $id);
-
-        return $stats;
+        return $this->StatMessage($folderid, $id);
     }
 
     /**

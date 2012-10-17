@@ -189,7 +189,6 @@ class BackendCardDAV extends BackendDiff {
 		foreach ($xmlvcardlist->element as $vcard)
 		{
 			$id = (string)$vcard->id->__toString();
-			ZLog::Write(LOGLEVEL_DEBUG, sprintf("BackendCardDAV->GetMessageList(Add vcard to collection '%s')", $vcard->vcard->__toString()));
 			$this->_collection[$id] = $vcard;
 			$messagelist[] = $this->StatMessage($folderid, $id);
 		}
@@ -272,11 +271,11 @@ class BackendCardDAV extends BackendDiff {
 		}
 		$data = $this->_collection[$id];
 		ZLog::Write(LOGLEVEL_DEBUG, sprintf("BackendCardDAV->StatMessage(id '%s', mod '%s')", $data->id->__toString(), $data->etag->__toString()));
-		$message = array();
-		$message['id'] = (string)$data->id->__toString();
-		$message['flags'] = "1";
-		$message['mod'] = (string)$data->etag->__toString();
-		return $message;
+		$stats = array();
+		$stats['id'] = (string)$data->id->__toString();
+		$stats['flags'] = "1";
+		$stats['mod'] = (string)$data->etag->__toString();
+		return $stats;
 	}
 
 	/**

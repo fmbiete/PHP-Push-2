@@ -832,6 +832,23 @@ class Utils {
         }
         return $string;
     }
+
+    /**
+     * Converts a html string into a plain text string
+     *
+     * @param string $html
+     *
+     * @access public
+     * @return string
+     */
+    public static function ConvertHtmlToText($html) {
+        // remove css-style tags
+        $plaintext = preg_replace("/<style.*?<\/style>/is", "", $html);
+        // remove all other html
+        $plaintext = strip_tags($plaintext);
+
+        return $plaintext;
+    }
 }
 
 
