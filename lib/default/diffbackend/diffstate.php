@@ -192,7 +192,7 @@ class DiffState implements IChanges {
             // All data left in new have been added
             $change["type"] = "change";
             $change["flags"] = SYNC_NEWMESSAGE;
-            $change["read"] = SYNC_NEWMESSAGE;
+            $change["star"] = SYNC_NEWMESSAGE;
             $change["id"] = $new[$inew]["id"];
             $changes[] = $change;
             $inew++;
