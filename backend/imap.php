@@ -47,6 +47,7 @@ include_once('lib/default/diffbackend/diffbackend.php');
 include_once('include/mimeDecode.php');
 require_once('include/z_RFC822.php');
 
+
 class BackendIMAP extends BackendDiff {
     protected $wasteID;
     protected $sentID;
@@ -79,15 +80,15 @@ class BackendIMAP extends BackendDiff {
         $this->wasteID = false;
         $this->sentID = false;
         $this->server = "{" . IMAP_SERVER . ":" . IMAP_PORT . "/imap" . IMAP_OPTIONS . "}";
-        
+
+        if (!function_exists("imap_open"))
+            throw new FatalException("BackendIMAP(): php-imap module is not installed", 0, null, LOGLEVEL_FATAL);
+            
         $this->excludedFolders = array();
         if( defined('IMAP_EXCLUDED_FOLDERS') ) {
             $this->excludedFolders = explode("|", IMAP_EXCLUDED_FOLDERS);
             ZLog::Write(LOGLEVEL_DEBUG, sprintf("BackendIMAP->Logon(): Excluding Folders (%s)", IMAP_EXCLUDED_FOLDERS));
         }
-
-        if (!function_exists("imap_open"))
-            throw new FatalException("BackendIMAP(): php-imap module is not installed", 0, null, LOGLEVEL_FATAL);
 
         // open the IMAP-mailbox
         $this->mbox = @imap_open($this->server , $username, $password, OP_HALFOPEN);
@@ -700,7 +701,7 @@ class BackendIMAP extends BackendDiff {
                 for ($i = 0; $notExcluded && $i < count($this->excludedFolders); $i++) {
                     if (strpos(strtolower($val->name), strtolower($this->excludedFolders[$i])) !== false) {
                         $notExcluded = false;
-                        ZLog::Write(LOGLEVEL_DEBUG, "Pattern: <" . $this->excludedFolders[$i] . "> Excluded Folder: " . $val->name);
+                        ZLog::Write(LOGLEVEL_DEBUG, "Pattern: <" . $this->excludedFolders[$i] . "> found, excluding folder: " . $val->name);
                     }
                 }
 
