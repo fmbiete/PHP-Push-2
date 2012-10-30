@@ -104,8 +104,12 @@ class DiffState implements IChanges {
      * @return boolean
      */
     static public function RowCmp($a, $b) {
-        // TODO implement different comparing functions
-        return $a["id"] < $b["id"] ? 1 : -1;
+        if (is_numeric($a["id"]) && is_numeric($b["id"])) {
+            return $a["id"] < $b["id"] ? 1 : -1;
+        }
+        else {
+            return strcmp($a["id"], $b["id"]) < 0 ? 1 : -1;
+        }
     }
 
     /**
