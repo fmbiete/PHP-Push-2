@@ -569,14 +569,16 @@ class Sync extends RequestProcessor {
                 $sc->SetLifetime($hbinterval);
 
             // states are lazy loaded - we have to make sure that they are there!
+            $loadstatus = SYNC_STATUS_SUCCESS;
             foreach($sc as $folderid => $spa) {
                 $fad = array();
                 // if loading the states fails, we do not enter heartbeat, but we keep $status on SYNC_STATUS_SUCCESS
                 // so when the changes are exported the correct folder gets an SYNC_STATUS_INVALIDSYNCKEY
-                $loadstatus = $this->loadStates($sc, $spa, $fad);
+                if ($loadstatus == SYNC_STATUS_SUCCESS)
+                    $loadstatus = $this->loadStates($sc, $spa, $fad);
             }
 
-            if ($loadstatus = SYNC_STATUS_SUCCESS) {
+            if ($loadstatus == SYNC_STATUS_SUCCESS) {
                 $foundchanges = false;
 
                 // wait for changes
@@ -711,12 +713,6 @@ class Sync extends RequestProcessor {
                                 $spa->SetNewSyncKey(self::$deviceManager->GetStateManager()->GetNewSyncKey($spa->GetSyncKey()));
 
                         self::$encoder->startTag(SYNC_FOLDER);
-
-                        if($spa->HasContentClass()) {
-                            self::$encoder->startTag(SYNC_FOLDERTYPE);
-                                self::$encoder->content($spa->GetContentClass());
-                            self::$encoder->endTag();
-                        }
 
                         self::$encoder->startTag(SYNC_SYNCKEY);
                         if($status == SYNC_STATUS_SUCCESS && $spa->HasNewSyncKey())
