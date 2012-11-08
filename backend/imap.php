@@ -121,13 +121,15 @@ class BackendIMAP extends BackendDiff {
             // list all errors
             $errors = imap_errors();
             if (is_array($errors)) {
-                foreach ($errors as $e)
-                    if (stripos($e, "fail") !== false)
+                foreach ($errors as $e) {
+                    if (stripos($e, "fail") !== false) {
                         $level = LOGLEVEL_WARN;
-                    else
+                    }
+                    else {
                         $level = LOGLEVEL_DEBUG;
-
+                    }
                     ZLog::Write($level, "BackendIMAP->Logoff(): IMAP said: " . $e);
+                }
             }
             @imap_close($this->mbox);
             ZLog::Write(LOGLEVEL_DEBUG, "BackendIMAP->Logoff(): IMAP connection closed");
@@ -559,7 +561,7 @@ class BackendIMAP extends BackendDiff {
         $mail = @imap_fetchheader($this->mbox, $id, FT_UID) . @imap_body($this->mbox, $id, FT_PEEK | FT_UID);
 
         $mobj = new Mail_mimeDecode($mail);
-        $message = $mobj->decode(array('decode_headers' => true, 'decode_bodies' => false, 'include_bodies' => true, 'charset' => 'utf-8'));
+        $message = $mobj->decode(array('decode_headers' => true, 'decode_bodies' => true, 'include_bodies' => true, 'charset' => 'utf-8'));
 
         //trying parts
         $mparts = $message->parts;
@@ -579,8 +581,9 @@ class BackendIMAP extends BackendDiff {
         unset($mobj);
         unset($mail);
 
+        include_once('include/stringstreamwrapper.php');
         $attachment = new SyncItemOperationsAttachment();
-        $attachment->data = $mparts[$part]->body;
+        $attachment->data = StringStreamWrapper::Open($mparts[$part]->body);
         if (isset($mparts[$part]->ctype_primary) && isset($mparts[$part]->ctype_secondary))
             $attachment->contenttype = $mparts[$part]->ctype_primary .'/'.$mparts[$part]->ctype_secondary;
             

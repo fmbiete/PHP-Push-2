@@ -58,43 +58,24 @@ class GetAttachment extends RequestProcessor {
 
         try {
             $attachment = self::$backend->GetAttachmentData($attname);
-            if (is_string($attachment->data)) {
-                $str = $attachment->data;
-                ZLog::Write(LOGLEVEL_DEBUG, sprintf("HandleGetAttachment(): attachment string from backend: %s", $str));
+            $stream = $attachment->data;
+            ZLog::Write(LOGLEVEL_DEBUG, sprintf("HandleGetAttachment(): attachment stream from backend: %s", $stream));
 
-                header("Content-Type: " . $attachment->contenttype);
-                $lenstr = strlen($str);
-                $l = 0;
-                do {
-                    $d = substr($str, $l, 1024);
-                    $l += strlen($d);
-                    echo $d;
+            header("Content-Type: application/octet-stream");
+            $l = 0;
+            while (!feof($stream)) {
+                $d = fgets($stream, 4096);
+                $l += strlen($d);
+                echo $d;
 
-                    if (($l/1024) % 100 == 0)
-                        self::$topCollector->AnnounceInformation(sprintf("Streaming attachment: %d KB sent", round($l/1024)));
-                } while($l < $lenstr);
-                self::$topCollector->AnnounceInformation(sprintf("Streamed %d KB attachment", $l/1024), true);
-                ZLog::Write(LOGLEVEL_DEBUG, sprintf("HandleGetAttachment(): attachment with %d KB sent to mobile", $l/1024));               
+                // announce an update every 100K
+                if (($l/1024) % 100 == 0)
+                    self::$topCollector->AnnounceInformation(sprintf("Streaming attachment: %d KB sent", round($l/1024)));
             }
-            else {
-                $stream = $attachment->data;
-                ZLog::Write(LOGLEVEL_DEBUG, sprintf("HandleGetAttachment(): attachment stream from backend: %s", $stream));
+            fclose($stream);
+            self::$topCollector->AnnounceInformation(sprintf("Streamed %d KB attachment", $l/1024), true);
+            ZLog::Write(LOGLEVEL_DEBUG, sprintf("HandleGetAttachment(): attachment with %d KB sent to mobile", $l/1024));
 
-                header("Content-Type: application/octet-stream");
-                $l = 0;
-                while (!feof($stream)) {
-                    $d = fgets($stream, 4096);
-                    $l += strlen($d);
-                    echo $d;
-
-                    // announce an update every 100K
-                    if (($l/1024) % 100 == 0)
-                        self::$topCollector->AnnounceInformation(sprintf("Streaming attachment: %d KB sent", round($l/1024)));
-                }
-                fclose($stream);
-                self::$topCollector->AnnounceInformation(sprintf("Streamed %d KB attachment", $l/1024), true);
-                ZLog::Write(LOGLEVEL_DEBUG, sprintf("HandleGetAttachment(): attachment with %d KB sent to mobile", $l/1024));
-            }
         }
         catch (StatusException $s) {
             // StatusException already logged so we just need to pass it upwards to send a HTTP error
