@@ -297,7 +297,23 @@ class carddav_backend
 	 */
 	public function get_all_vcards($include_vcards = true, $raw = false)
 	{
-		$content = '<?xml version="1.0" encoding="utf-8" ?><D:sync-collection xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:carddav"><D:sync-token></D:sync-token><D:prop><D:getcontenttype/><D:getetag/><D:allprop/><C:address-data><C:allprop/></C:address-data></D:prop><C:filter/></D:sync-collection>';
+		$content = <<<EOFCONTENTGET
+<?xml version="1.0" encoding="utf-8" ?>
+<D:sync-collection xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:carddav">
+  <D:sync-token>
+  </D:sync-token>
+  <D:prop>
+    <D:getcontenttype/>
+    <D:getetag/>
+    <D:allprop/>
+    <C:address-data>
+      <C:allprop/>
+    </C:address-data>
+  </D:prop>
+  <C:filter/>
+</D:sync-collection>
+EOFCONTENTGET;
+
 		$content_type = 'application/xml';
 		$result = $this->query($this->url, 'REPORT', $content, $content_type);
 
@@ -319,6 +335,59 @@ class carddav_backend
 				throw new Exception('Woops, something\'s gone wrong! The CardDAV server returned the http status code ' . $result['http_code'] . '.', self::EXCEPTION_WRONG_HTTP_STATUS_CODE_GET);
 			break;
 		}
+	}
+	
+	/**
+	 * Get all vcards matching a full name or mail.
+	 *
+	 * @param   string $pattern             Pattern to search
+	 * @param   boolean $include_vcards     Include vCards within the response (simplified only)
+	 * @param   boolean $raw                Get response raw or simplified
+     * @return  string                      Raw or simplified XML response
+     */
+	public function search_vcards($pattern, $include_vcards = true, $raw = false)
+	{
+        $content = <<<EOFCONTENTSEARCH
+<?xml version="1.0" encoding="utf-8" ?>
+<C:addressbook-query xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:carddav">
+  <D:prop>
+    <D:getetag/>
+    <C:address-data>
+      <C:allprop/>
+    </C:address-data>
+  </D:prop>
+  <C:filter test="anyof">
+    <C:prop-filter name="FN">
+      <C:text-match collation="i;unicode-casemap" match-type="starts-with">$pattern</C:text-match>
+    </C:prop-filter>
+    <C:prop-filter name="EMAIL">
+      <C:text-match collation="i;unicode-casemap" match-type="starts-with">$pattern</C:text-match>
+    </C:prop-filter>
+  </C:filter>
+</C:addressbook-query>
+EOFCONTENTSEARCH;
+        
+        $content_type = 'text/xml';
+        $result = $this->query($this->url, 'REPORT', $content, $content_type);
+
+        switch ($result['http_code'])
+        {
+            case 200:
+            case 207:
+                if ($raw === true)
+                {
+                    return $result['response'];
+                }
+                else
+                {
+                    return $this->simplify($result['response'], $include_vcards);
+                }
+            break;
+
+            default:
+                throw new Exception('Woops, something\'s gone wrong! The CardDAV server returned the http status code ' . $result['http_code'] . '.', self::EXCEPTION_WRONG_HTTP_STATUS_CODE_GET);
+            break;
+        }
 	}
 
 	/**

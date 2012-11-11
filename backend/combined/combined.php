@@ -62,6 +62,7 @@ class BackendCombined extends Backend {
     public $backends;
     private $activeBackend;
     private $activeBackendID;
+    private $searchBackend;
 
     /**
      * Constructor of the combined backend
@@ -116,6 +117,9 @@ class BackendCombined extends Backend {
                 return false;
             }
         }
+        
+        ZPush::IncludeBackend('BackendSearchCardDAV');
+        $this->searchBackend = new BackendSearchCardDAV($u, $p);
         ZLog::Write(LOGLEVEL_DEBUG, "Combined->Logon() success");
         return true;
     }
@@ -424,6 +428,17 @@ class BackendCombined extends Backend {
      */
     public function GetSupportedASVersion() {
         return ZPush::ASV_14;
+    }
+    
+    /**
+     * Returns a ISearchProvider implementation used for searches
+     * the SearchProvider is just a stub
+     *
+     * @access public
+     * @return object       Implementation of ISearchProvider
+     */
+    public function GetSearchProvider() {
+        return $this->searchBackend;
     }
 }
 ?>

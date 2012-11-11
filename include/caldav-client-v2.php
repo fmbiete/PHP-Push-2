@@ -86,7 +86,7 @@ class CalDAVClient {
   protected $parser; // our XML parser object
   
   private $debug = false; // Whether we are debugging
-
+  
   /**
   * Constructor, initialises the class
   *
@@ -969,6 +969,9 @@ EOFILTER;
 $time_range = <<<EOTIME
                 <C:time-range start="$start" end="$finish"/>
 EOTIME;
+    }
+    else {
+        $time_range = "";
     }
 
     // Warning!  May contain traces of double negatives...
