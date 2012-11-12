@@ -105,10 +105,14 @@ class BackendSearchCardDAV implements ISearchProvider {
      */
     public function GetGALSearchResults($searchquery, $searchrange) {
         if (isset($this->connection) && $this->connection !== false) {
-            $url = $this->url . '/' . CARDDAV_PRINCIPAL . '/';
+            if (strlen($searchquery) < 5) {
+                return false;
+            }
+
+            $url = $this->url . CARDDAV_PRINCIPAL . '/';
             ZLog::Write(LOGLEVEL_DEBUG, sprintf("BackendSearchCardDAV->GetGALSearchResults(%s, %s) -> URL: %s", $searchquery, $searchrange, $url));
             $this->connection->set_url($url);
-            $vcardlist = $this->connection->search_vcards($searchquery, false, false);
+            $vcardlist = $this->connection->search_vcards($searchquery, 15, true, false);
             if ($vcardlist === false) {
                 ZLog::Write(LOGLEVEL_ERROR, "BackendSearchCardDAV: Error in search query. Search aborted");
                 return false;
@@ -139,20 +143,34 @@ class BackendSearchCardDAV implements ISearchProvider {
             
             $i = 0;
             $rc = 0;
-            foreach($xmlvcardlist->element as $vcard) {
+            foreach ($xmlvcardlist->element as $vcard) {
                 if ($i >= $rangestart && $i < $querylimit) {
                     $card = new vCard(false, $vcard->vcard->__toString());
-                    $items[$rc][SYNC_GAL_EMAILADDRESS]   = isset($card->EMAIL) && isset($card->EMAIL[0]) ? $card->EMAIL[0] : "";
+                    if ($card->EMAIL) {
+                        if (is_scalar($card->EMAIL[0])) {
+                            $items[$rc][SYNC_GAL_EMAILADDRESS] = $card->EMAIL[0];
+                        }
+                        else {
+                            $items[$rc][SYNC_GAL_EMAILADDRESS] = $card->EMAIL[0]['Value'];
+                        }
+                    }
                     $items[$rc][SYNC_GAL_DISPLAYNAME]    = isset($card->FN) && isset($card->FN[0]) ? $card->FN[0] : $items[$rc][SYNC_GAL_EMAILADDRESS];
-                    $items[$rc][SYNC_GAL_PHONE]          = isset($card->TEL) && isset($card->TEL['work']) ? $card->TEL['work'] : "";
+                    if ($card->TEL) {
+                        if (is_scalar($card->TEL[0])) {
+                            $items[$rc][SYNC_GAL_PHONE] = $card->TEL[0];
+                        }
+                        else {
+                            $items[$rc][SYNC_GAL_PHONE] = $card->TEL[0]['Value'];
+                        }
+                    }
                     $items[$rc][SYNC_GAL_OFFICE]         = '';
-                    $items[$rc][SYNC_GAL_TITLE]          = isset($card->TITLE) ? $card->TITLE : "";
-                    $items[$rc][SYNC_GAL_COMPANY]        = isset($card->ORG) && isset($card->ORG['Name']) ? $card->ORG['Name'] : "";
+                    $items[$rc][SYNC_GAL_TITLE]          = isset($card->TITLE) && isset($card->TITLE[0]) ? $card->TITLE[0] : "";
+                    $items[$rc][SYNC_GAL_COMPANY]        = isset($card->ORG) && isset($card->ORG[0]) && isset($card->ORG[0]['Name']) ? $card->ORG[0]['Name'] : "";
                     $items[$rc][SYNC_GAL_ALIAS]          = '';
-                    $items[$rc][SYNC_GAL_FIRSTNAME]      = isset($card->N) && isset($card->N['FirstName']) ? $card->N['FirstName'] : "";
-                    $items[$rc][SYNC_GAL_LASTNAME]       = isset($card->N) && isset($card->N['LastName']) ? $card->N['LastName'] : "";
-                    $items[$rc][SYNC_GAL_HOMEPHONE]      = isset($card->TEL) && isset($card->TEL['home']) ? $card->TEL['home'] : "";
-                    $items[$rc][SYNC_GAL_MOBILEPHONE]    = isset($card->TEL) && isset($card->TEL['cell']) ? $card->TEL['cell'] : "";
+                    $items[$rc][SYNC_GAL_FIRSTNAME]      = isset($card->N) && isset($card->N[0]) && isset($card->N[0]['FirstName']) ? $card->N[0]['FirstName'] : "";
+                    $items[$rc][SYNC_GAL_LASTNAME]       = isset($card->N) && isset($card->N[0]) && isset($card->N['LastName']) ? $card->N['LastName'] : "";
+                    $items[$rc][SYNC_GAL_HOMEPHONE]      = isset($card->TEL) && isset($card->TEL[0]) && isset($card->TEL[0]['home']) ? $card->TEL[0]['home'] : "";
+                    $items[$rc][SYNC_GAL_MOBILEPHONE]    = isset($card->TEL) && isset($card->TEL[0]) && isset($card->TEL[0]['cell']) ? $card->TEL[0]['cell'] : "";
                     unset($card);
                     
                     $rc++;

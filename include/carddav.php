@@ -341,12 +341,19 @@ EOFCONTENTGET;
 	 * Get all vcards matching a full name or mail.
 	 *
 	 * @param   string $pattern             Pattern to search
+     * @param   integer $limit              Return only N vcards
 	 * @param   boolean $include_vcards     Include vCards within the response (simplified only)
 	 * @param   boolean $raw                Get response raw or simplified
      * @return  string                      Raw or simplified XML response
      */
-	public function search_vcards($pattern, $include_vcards = true, $raw = false)
+	public function search_vcards($pattern, $limit, $include_vcards = true, $raw = false)
 	{
+//  <C:filter test="anyof">
+//    <C:prop-filter name="EMAIL">
+//      <C:text-match collation="i;unicode-casemap" negate-condition="no" match-type="contains">$pattern</C:text-match>
+//    </C:prop-filter>
+
+
         $content = <<<EOFCONTENTSEARCH
 <?xml version="1.0" encoding="utf-8" ?>
 <C:addressbook-query xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:carddav">
@@ -358,12 +365,12 @@ EOFCONTENTGET;
   </D:prop>
   <C:filter test="anyof">
     <C:prop-filter name="FN">
-      <C:text-match collation="i;unicode-casemap" match-type="starts-with">$pattern</C:text-match>
-    </C:prop-filter>
-    <C:prop-filter name="EMAIL">
-      <C:text-match collation="i;unicode-casemap" match-type="starts-with">$pattern</C:text-match>
+      <C:text-match collation="i;unicode-casemap" negate-condition="no" match-type="contains">$pattern</C:text-match>
     </C:prop-filter>
   </C:filter>
+  <C:limit>
+    <C:nresults>$limit</C:nresults>
+  </C:limit>
 </C:addressbook-query>
 EOFCONTENTSEARCH;
         
