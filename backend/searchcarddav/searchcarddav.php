@@ -59,24 +59,24 @@ class BackendSearchCardDAV implements ISearchProvider {
      * @return
      * @throws StatusException
      */
-    public function BackendSearchCardDAV($username, $password) {
+    public function BackendSearchCardDAV() {
         if (!function_exists("curl_init")) {
             throw new StatusException("BackendSearchCardDAV(): php-curl is not installed. Search aborted.", SYNC_SEARCHSTATUS_STORE_SERVERERROR, null, LOGLEVEL_FATAL);
         }
 
-        $url = str_replace('%u', $username, CARDDAV_SERVER . ':' . CARDDAV_PORT . CARDDAV_PATH);
+        $url = str_replace('%u', Request::GetAuthUser(), CARDDAV_SERVER . ':' . CARDDAV_PORT . CARDDAV_PATH);
         ZLog::Write(LOGLEVEL_DEBUG, sprintf("BackendSearchCardDAV('%s')", $url));
         $this->connection = new carddav_backend($url);
-        $this->connection->set_auth($username, $password);
+        $this->connection->set_auth(Request::GetAuthUser(), Request::GetAuthPassword());
 
         if ($this->connection->check_connection())
         {
-            ZLog::Write(LOGLEVEL_DEBUG, sprintf("BackendSearchCardDAV(): User '%s' is authenticated on CardDAV", $username));
+            ZLog::Write(LOGLEVEL_DEBUG, sprintf("BackendSearchCardDAV(): User '%s' is authenticated on CardDAV", Request::GetAuthUser()));
             $this->url = $url;
         }
         else
         {
-            throw new StatusException(sprintf("BackendSearchCardDAV(): Could not bind to server with user '%s' and specified password! Search aborted.", $username), SYNC_SEARCHSTATUS_STORE_CONNECTIONFAILED, null, LOGLEVEL_ERROR);
+            throw new StatusException(sprintf("BackendSearchCardDAV(): Could not bind to server with user '%s' and specified password! Search aborted.", Request::GetAuthUser()), SYNC_SEARCHSTATUS_STORE_CONNECTIONFAILED, null, LOGLEVEL_ERROR);
         }
     }
 
