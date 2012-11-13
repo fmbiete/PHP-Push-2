@@ -712,6 +712,10 @@ class Sync extends RequestProcessor {
                             $changecount > 0 || (! $spa->HasSyncKey() && $status == SYNC_STATUS_SUCCESS))
                                 $spa->SetNewSyncKey(self::$deviceManager->GetStateManager()->GetNewSyncKey($spa->GetSyncKey()));
 
+                        if($spa->HasContentClass()) {
+                            ZLog::Write(LOGLEVEL_DEBUG, sprintf("Folder type: %s", $spa->GetContentClass()));
+                        }
+
                         self::$encoder->startTag(SYNC_FOLDER);
 
                         self::$encoder->startTag(SYNC_SYNCKEY);
@@ -1048,7 +1052,7 @@ class Sync extends RequestProcessor {
         $ignoreMessage = false;
         if ($actiondata["failstate"]) {
             // message was ADDED before, do NOT add it again
-            if ($todo == SYNC_ADD && $actiondata["failstate"]["clientids"][$clientid]) {
+            if ($todo == SYNC_ADD && isset($actiondata["failstate"]["clientids"][$clientid])) {
                 $ignoreMessage = true;
 
                 // make sure no messages are sent back
