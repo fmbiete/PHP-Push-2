@@ -189,7 +189,6 @@ class BackendCalDAV extends BackendDiff {
 
 		/* Calculating the range of events we want to sync */
 		$begin = gmdate("Ymd\THis\Z", $cutoffdate);
-		// FRAN: fix this, tiempo definido por el intervalo a sincronizar
 		$finish = gmdate("Ymd\THis\Z", 2147483647);
 
 		$path = $this->_caldav_path . substr($folderid, 1) . "/";
@@ -1220,7 +1219,7 @@ class BackendCalDAV extends BackendDiff {
 			$rtfparser->loadrtf(base64_decode($data->rtf));
 			$rtfparser->output("ascii");
 			$rtfparser->parse();
-			$vevent->AddProperty("DESCRIPTION", $rtfparser->out);
+			$vtodo->AddProperty("DESCRIPTION", $rtfparser->out);
 		}
 		if (isset($data->categories) && is_array($data->categories))
 		{

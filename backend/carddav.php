@@ -119,8 +119,8 @@ class BackendCardDAV extends BackendDiff {
 		ZLog::Write(LOGLEVEL_DEBUG, sprintf("BackendCardDAV->GetFolder('%s')", $id));
 		
 		$folder = new SyncFolder();
-		$folder->serverid = CARDDAV_PRINCIPAL;
-		$folder->displayname = "CardDAV AddressBook";
+		$folder->serverid = $id;
+		$folder->displayname = sprintf("%s AddressBook", Request::GetAuthUser());
 		$folder->parentid = "0";
 		$folder->type = SYNC_FOLDER_TYPE_USER_CONTACT;
 
@@ -136,12 +136,12 @@ class BackendCardDAV extends BackendDiff {
 		ZLog::Write(LOGLEVEL_DEBUG, sprintf("BackendCardDAV->StatFolder('%s')", $id));
 
 		$val = $this->GetFolder($id);
-		$folder = array();
-		$folder["id"] = $id;
-		$folder["parent"] = $val->parentid;
-		$folder["mod"] = $val->displayname;
-		ZLog::Write(LOGLEVEL_DEBUG, sprintf("BackendCardDAV->StatFolder(Abook Id [%s] Abook Name [%s])", $folder["id"], $folder["mod"]));
-		return $folder;
+		$stat = array();
+		$stat["id"] = $id;
+		$stat["parent"] = $val->parentid;
+		$stat["mod"] = $val->displayname;
+
+		return $stat;
 	}
 
 	/**
@@ -368,6 +368,16 @@ class BackendCardDAV extends BackendDiff {
 		return false;
 	}
 
+    /**
+     * Indicates which AS version is supported by the backend.
+     *
+     * @access public
+     * @return string       AS version constant
+     */
+    public function GetSupportedASVersion() {
+        return ZPush::ASV_14;
+    }
+
 	/**
 	 * Convert a VCard to ActiveSync format
 	 * @param vcard $data
@@ -464,18 +474,34 @@ class BackendCardDAV extends BackendDiff {
 			{
 				if ($vcard_attribute === "note" && !empty($card[$vcard_attribute]))
 				{
-					$body = $card[$vcard_attribute];
-					// truncate body, if requested
-					if(strlen($body) > $truncsize) {
-						$body = Utils::Utf8_truncate($body, $truncsize);
-						$message->bodytruncated = 1;
-					} else {
-						$body = $body;
-						$message->bodytruncated = 0;
-					}
-					$body = str_replace("\n","\r\n", str_replace("\r","",$body));
-					$message->body = $body;
-					$message->bodysize = strlen($body);
+                    $body = $card[$vcard_attribute];
+                    $body = Utils::ConvertHtmlToText($body);
+                    $body = str_replace("\n","\r\n", str_replace("\r","",$body));
+
+                    if (Request::GetProtocolVersion() >= 12.0) {
+                        $message->asbody = new SyncBaseBody();
+
+                        if (strlen($body) > $truncsize) {
+                            $message->asbody->data = Utils::Utf8_truncate($body, $truncsize);
+                            $message->asbody->truncated = 1;
+                        }
+                        else {
+                            $message->asbody->data = $body;
+                            $message->asbody->truncated = 0;
+                        }
+                        $message->asbody->type = SYNC_BODYPREFERENCE_PLAIN;
+                        $message->asbody->estimatedDataSize = strlen($message->asbody->data);
+                    }
+                    else { //2.5
+                        if (strlen($body) > $truncsize) {
+                            $body = Utils::Utf8_truncate($body, $truncsize);
+                            $message->bodytruncated = 1;
+                        } else {
+                            $message->bodytruncated = 0;
+                        }                        
+                        $message->body = $body;
+                        $message->bodysize = strlen($body);
+                    }
 				}
 				else if ($vcard_attribute === "bday" && !empty($card[$vcard_attribute]))
 				{
