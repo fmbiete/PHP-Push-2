@@ -95,7 +95,7 @@ class BackendSearchCardDAV implements ISearchProvider {
 
 
     /**
-     * Queries the LDAP backend
+     * Queries the CardDAV backend
      *
      * @param string        $searchquery        string to be searched for
      * @param string        $searchrange        specified searchrange
