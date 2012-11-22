@@ -48,7 +48,7 @@ include_once('include/mimeDecode.php');
 require_once('include/z_RFC822.php');
 
 
-class BackendIMAP extends BackendDiff {
+class BackendIMAP extends BackendDiff implements ISearchProvider {
     protected $wasteID;
     protected $sentID;
     protected $server;
@@ -60,6 +60,15 @@ class BackendIMAP extends BackendDiff {
     protected $sinkfolders;
     protected $sinkstates;
     protected $excludedFolders;
+
+    public function BackendIMAP() {
+        $this->wasteID = false;
+        $this->sentID = false;
+        $this->mboxFolder = "";
+
+        if (!function_exists("imap_open"))
+            throw new FatalException("BackendIMAP(): php-imap module is not installed", 0, null, LOGLEVEL_FATAL);
+    }
 
     /**----------------------------------------------------------------------------------------------------------
      * default backend methods
@@ -1485,14 +1494,174 @@ class BackendIMAP extends BackendDiff {
 
 
     /**
+     * Returns the BackendIMAP as it implements the ISearchProvider interface
+     * This could be overwritten by the global configuration
+     *
+     * @access public
+     * @return object       Implementation of ISearchProvider
+     */
+    public function GetSearchProvider() {
+        return $this;
+    }
+
+
+    /**----------------------------------------------------------------------------------------------------------
+     * public ISearchProvider methods
+     */
+
+    /**
+     * Indicates if a search type is supported by this SearchProvider
+     *
+     * @param string        $searchtype
+     *
+     * @access public
+     * @return boolean
+     */
+    public function SupportsType($searchtype) {
+        return ($searchtype == ISearchProvider::SEARCH_MAILBOX);
+    }
+
+
+    /**
+     * Queries the IMAP backend
+     *
+     * @param string        $searchquery        string to be searched for
+     * @param string        $searchrange        specified searchrange
+     *
+     * @access public
+     * @return array        search results
+     */
+    public function GetGALSearchResults($searchquery, $searchrange) {
+        return false;
+    }
+
+    /**
+     * Searches for the emails on the server
+     *
+     * @param ContentParameter $cpo
+     * @param string $prefix If used with the combined backend here will come the backend id and delimiter
+     *
+     * @return array
+     */
+    public function GetMailboxSearchResults($cpo, $prefix = '') {
+        ZLog::Write(LOGLEVEL_DEBUG, sprintf("BackendIMAP->GetMailboxSearchResults()"));
+
+        $items = false;
+        $searchFolderId = $cpo->GetSearchFolderid();
+        $searchRange = explode('-', $cpo->GetSearchRange());
+        $filter = $this->getSearchRestriction($cpo);
+
+        // Open the folder to search
+        $search = true;
+
+        if (empty($searchFolderId)) {
+            $folderId = $this->getFolderIdFromImapId('INBOX');
+            $searchFolderId = $folderId;
+        }
+
+        // Convert folderId to IMAP id
+        $imapId = $this->getImapIdFromFolderId($folderId);
+        ZLog::Write(LOGLEVEL_DEBUG, sprintf("BackendIMAP->GetMailboxSearchResults: imapid <%s>", $imapId));
+
+        if (@imap_reopen($this->mbox, $this->server . $imapId)) {
+            ZLog::Write(LOGLEVEL_DEBUG, sprintf("BackendIMAP->GetMailboxSearchResults: Filter <%s>", $filter));
+            // Search in folder
+            $list = @imap_search($this->mbox, $filter, SE_UID, "UTF-8");
+        
+            //TODO: search recursive
+            //$cpo->GetSearchDeepTraversal()
+
+            if ($list !== false || count($list) == 0) {
+                // range for the search results
+                $rangestart = 0;
+                $rangeend = SEARCH_MAXRESULTS;
+
+                if (is_array($searchRange) && isset($searchRange[0]) && isset($searchRange[1])) {
+                    $rangestart = $searchRange[0];
+                    $rangeend = $searchRange[1];
+                }
+                
+                $cnt = count($list);
+                $items = array();
+                $items['range'] = $cpo->GetSearchRange();
+                $items['searchtotal'] = $cnt;
+                    
+                ZLog::Write(LOGLEVEL_DEBUG, sprintf("BackendIMAP->GetMailboxSearchResults: %s entries found, returning %s to %s", $cnt, $rangestart, ($rangeend - $rangestart)));
+
+                for ($i = $rangestart, $j = 0; $i <= $rangeend && $i < $cnt; $i++, $j++) {
+                    $items[$j]['class'] = 'Email';
+                    $items[$j]['longid'] = $prefix . $searchFolderId . ":" . $list[$i];
+                    $items[$j]['folderid'] = $prefix . $searchFolderId;
+                    ZLog::Write(LOGLEVEL_DEBUG, sprintf("BackendIMAP->GetMailboxSearchResults: %s : %s", $searchFolderId, $list[$i]));
+                }
+            }
+            else {
+                ZLog::Write(LOGLEVEL_DEBUG, sprintf("BackendIMAP->GetMailboxSearchResults: No messages found!"));
+            }
+        }
+
+        return $items;
+    }
+
+    /**
+    * Terminates a search for a given PID
+    *
+    * @param int $pid
+    *
+    * @return boolean
+    */
+    public function TerminateSearch($pid) {
+        return true;
+    }
+
+    /**
+     * Disconnects from IMAP
+     *
+     * @access public
+     * @return boolean
+     */
+    public function Disconnect() {
+        // Don't close the mailbox, we will need it open in the Backend methods
+        return true;
+    }
+
+
+    /**
+     * Creates a search restriction
+     *
+     * @param ContentParameter $cpo
+     * @return string
+     */
+    private function getSearchRestriction($cpo) {
+        $searchText = $cpo->GetSearchFreeText();
+        $searchGreater = $cpo->GetSearchValueGreater();
+        $searchLess = $cpo->GetSearchValueLess();
+
+        $filter = 'BODY "' . $searchText . '"';
+        if ($searchGreater != '') {
+            $filter .= ' SINCE "' . $searchGreater . '"';
+        }
+        if ($searchLess != '') {
+            $filter .= ' BEFORE "' . $searchLess . '"';
+        }
+        
+        return $filter;
+    }
+
+
+    /**----------------------------------------------------------------------------------------------------------
+     * protected IMAP methods
+     */
+
+    /**
      * Unmasks a hex folderid and returns the imap folder id
      *
      * @param string        $folderid       hex folderid generated by convertImapId()
      *
-     * @access public
+     * @access protected
      * @return string       imap folder id
      */
-    public function getImapIdFromFolderId($folderid) {
+    protected function getImapIdFromFolderId($folderid) {
         $this->InitializePermanentStorage();
 
         if (isset($this->permanentStorage->fmFidFimap)) {
@@ -1515,10 +1684,10 @@ class BackendIMAP extends BackendDiff {
      *
      * @param string        $imapid         Imap folder id
      *
-     * @access public
+     * @access protected
      * @return string       hex folder id
      */
-    public function getFolderIdFromImapId($imapid) {
+    protected function getFolderIdFromImapId($imapid) {
         $this->InitializePermanentStorage();
 
         if (isset($this->permanentStorage->fmFimapFid)) {
@@ -1535,12 +1704,6 @@ class BackendIMAP extends BackendDiff {
         ZLog::Write(LOGLEVEL_WARN, sprintf("BackendIMAP->getFolderIdFromImapId('%s') = %s", $imapid, 'not initialized!'));
         return false;
     }
-
-
-
-    /**----------------------------------------------------------------------------------------------------------
-     * protected IMAP methods
-     */
 
     /**
      * Masks a imap folder id into a generated hex folderid
@@ -1677,13 +1840,13 @@ class BackendIMAP extends BackendDiff {
      */
     protected function imap_reopenFolder($folderid, $force = false) {
         // to see changes, the folder has to be reopened!
-           if ($this->mboxFolder != $folderid || $force) {
-               $s = @imap_reopen($this->mbox, $this->server . $folderid);
-               // TODO throw status exception
-               if (!$s) {
-                ZLog::Write(LOGLEVEL_WARN, "BackendIMAP->imap_reopenFolder('%s'): failed to change folder: ",$folderid, implode(", ", imap_errors()));
+        if ($this->mboxFolder != $folderid || $force) {
+            $s = @imap_reopen($this->mbox, $this->server . $folderid);
+            // TODO throw status exception
+            if (!$s) {
+                ZLog::Write(LOGLEVEL_WARN, sprintf("BackendIMAP->imap_reopenFolder('%s'): failed to change folder: ",$folderid, implode(", ", imap_errors())));
                 return false;
-               }
+            }
             $this->mboxFolder = $folderid;
         }
     }

@@ -20,7 +20,7 @@ include_once('include/carddav.php');
 include_once('include/z_RTF.php');
 include_once('include/vCard.php');
 
-class BackendCardDAV extends BackendDiff {
+class BackendCardDAV extends BackendDiff implements ISearchProvider {
 	// SOGoSync version
 	const SOGOSYNC_VERSION = '0.5.0';
 	// SOGoSync vcard Prodid
@@ -30,6 +30,17 @@ class BackendCardDAV extends BackendDiff {
 	private $_carddav_path;
 	private $_collection = array();
 
+    /**
+     * Constructor
+     *
+     */
+    public function BackendCardDAV() {
+                // Confirm PHP-CURL Installed; If Not, Exit
+        if (!function_exists("curl_init")) {
+            throw new FatalException("BackendCardDAV(): php-curl module is not installed", 0, null, LOGLEVEL_FATAL);
+        }
+    }
+
 	/**
 	 * Login to the CardDAV backend
 	 * @see IBackend::Logon()
@@ -38,8 +49,7 @@ class BackendCardDAV extends BackendDiff {
 	{
 		// Confirm PHP-CURL Installed; If Not, Exit
 		if (!function_exists("curl_init")) {
-			ZLog::Write(LOGLEVEL_ERROR, sprintf("ERROR: Carddav Backend requires PHP-CURL"));
-			return false;
+            throw new FatalException("BackendCardDAV()->Logon: php-curl module is not installed", 0, null, LOGLEVEL_FATAL);
 		}
 
 		$url = str_replace('%u', $username, CARDDAV_SERVER . ':' . CARDDAV_PORT . CARDDAV_PATH);
@@ -377,6 +387,166 @@ class BackendCardDAV extends BackendDiff {
     public function GetSupportedASVersion() {
         return ZPush::ASV_14;
     }
+
+
+    /**
+     * Returns the BackendIMAP as it implements the ISearchProvider interface
+     * This could be overwritten by the global configuration
+     *
+     * @access public
+     * @return object       Implementation of ISearchProvider
+     */
+    public function GetSearchProvider() {
+        return $this;
+    }
+
+
+    /**----------------------------------------------------------------------------------------------------------
+     * public ISearchProvider methods
+     */
+
+    /**
+     * Indicates if a search type is supported by this SearchProvider
+     * Currently only the type ISearchProvider::SEARCH_GAL (Global Address List) is implemented
+     *
+     * @param string        $searchtype
+     *
+     * @access public
+     * @return boolean
+     */
+    public function SupportsType($searchtype) {
+        return ($searchtype == ISearchProvider::SEARCH_GAL);
+    }
+
+
+    /**
+     * Queries the CardDAV backend
+     *
+     * @param string        $searchquery        string to be searched for
+     * @param string        $searchrange        specified searchrange
+     *
+     * @access public
+     * @return array        search results
+     */
+    public function GetGALSearchResults($searchquery, $searchrange) {
+        ZLog::Write(LOGLEVEL_DEBUG, sprintf("BackendCardDAV->GetGALSearchResults(%s, %s)", $searchquery, $searchrange));
+        if (isset($this->_carddav) && $this->_carddav !== false) {
+            if (strlen($searchquery) < 5) {
+                return false;
+            }
+
+            $vcardlist = $this->_carddav->search_vcards($searchquery, 15, true, false);
+            if ($vcardlist === false) {
+                ZLog::Write(LOGLEVEL_ERROR, "BackendCardDAV: Error in search query. Search aborted");
+                return false;
+            }
+            
+            $xmlvcardlist = new SimpleXMLElement($vcardlist);
+            
+            // range for the search results, default symbian range end is 50, wm 99,
+            // so we'll use that of nokia
+            $rangestart = 0;
+            $rangeend = 50;
+
+            if ($searchrange != '0') {
+                $pos = strpos($searchrange, '-');
+                $rangestart = substr($searchrange, 0, $pos);
+                $rangeend = substr($searchrange, ($pos + 1));
+            }
+            $items = array();
+
+            // TODO the limiting of the searchresults could be refactored into Utils as it's probably used more than once
+            $querycnt = $xmlvcardlist->count();
+            //do not return more results as requested in range
+            $querylimit = (($rangeend + 1) < $querycnt) ? ($rangeend + 1) : $querycnt;
+            $items['range'] = $rangestart.'-'.($querycnt-1);
+            $items['searchtotal'] = $querycnt;
+            
+            ZLog::Write(LOGLEVEL_DEBUG, sprintf("BackendCardDAV: %s entries found, returning %s to %s", $querycnt, $rangestart, $querylimit));
+            
+            $i = 0;
+            $rc = 0;
+            foreach ($xmlvcardlist->element as $vcard) {
+                if ($i >= $rangestart && $i < $querylimit) {
+                    $card = new vCard(false, $vcard->vcard->__toString());
+                    if ($card->EMAIL) {
+                        if (is_scalar($card->EMAIL[0])) {
+                            $items[$rc][SYNC_GAL_EMAILADDRESS] = $card->EMAIL[0];
+                        }
+                        else {
+                            $items[$rc][SYNC_GAL_EMAILADDRESS] = $card->EMAIL[0]['Value'];
+                        }
+                    }
+                    $items[$rc][SYNC_GAL_DISPLAYNAME]    = isset($card->FN) && isset($card->FN[0]) ? $card->FN[0] : $items[$rc][SYNC_GAL_EMAILADDRESS];
+                    if ($card->TEL) {
+                        if (is_scalar($card->TEL[0])) {
+                            $items[$rc][SYNC_GAL_PHONE] = $card->TEL[0];
+                        }
+                        else {
+                            $items[$rc][SYNC_GAL_PHONE] = $card->TEL[0]['Value'];
+                        }
+                    }
+                    $items[$rc][SYNC_GAL_OFFICE]         = '';
+                    $items[$rc][SYNC_GAL_TITLE]          = isset($card->TITLE) && isset($card->TITLE[0]) ? $card->TITLE[0] : "";
+                    $items[$rc][SYNC_GAL_COMPANY]        = isset($card->ORG) && isset($card->ORG[0]) && isset($card->ORG[0]['Name']) ? $card->ORG[0]['Name'] : "";
+                    $items[$rc][SYNC_GAL_ALIAS]          = '';
+                    $items[$rc][SYNC_GAL_FIRSTNAME]      = isset($card->N) && isset($card->N[0]) && isset($card->N[0]['FirstName']) ? $card->N[0]['FirstName'] : "";
+                    $items[$rc][SYNC_GAL_LASTNAME]       = isset($card->N) && isset($card->N[0]) && isset($card->N['LastName']) ? $card->N['LastName'] : "";
+                    $items[$rc][SYNC_GAL_HOMEPHONE]      = isset($card->TEL) && isset($card->TEL[0]) && isset($card->TEL[0]['home']) ? $card->TEL[0]['home'] : "";
+                    $items[$rc][SYNC_GAL_MOBILEPHONE]    = isset($card->TEL) && isset($card->TEL[0]) && isset($card->TEL[0]['cell']) ? $card->TEL[0]['cell'] : "";
+                    unset($card);
+                    
+                    $rc++;
+                }
+                $i++;
+            }
+            
+            unset($xmlvcardlist);
+            unset($vcardlist);
+
+            return $items;
+        }
+        else {
+            return false;
+        }
+    }
+
+    /**
+     * Searches for the emails on the server
+     *
+     * @param ContentParameter $cpo
+     *
+     * @return array
+     */
+    public function GetMailboxSearchResults($cpo) {
+        return false;
+    }
+
+    /**
+    * Terminates a search for a given PID
+    *
+    * @param int $pid
+    *
+    * @return boolean
+    */
+    public function TerminateSearch($pid) {
+        return true;
+    }
+
+    /**
+     * Disconnects from CardDAV
+     *
+     * @access public
+     * @return boolean
+     */
+    public function Disconnect() {
+        return true;
+    }
+
+
+    /**----------------------------------------------------------------------------------------------------------
+     * private BackendCardDAV methods
+     */
 
 	/**
 	 * Convert a VCard to ActiveSync format
