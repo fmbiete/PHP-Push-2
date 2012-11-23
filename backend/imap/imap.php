@@ -59,7 +59,7 @@ class BackendIMAP extends BackendDiff implements ISearchProvider {
     protected $serverdelimiter;
     protected $sinkfolders;
     protected $sinkstates;
-    protected $excludedFolders;
+    protected $excludedFolders; /* fmbiete's contribution r1527, ZP-319 */
 
     public function BackendIMAP() {
         $this->wasteID = false;
@@ -92,12 +92,14 @@ class BackendIMAP extends BackendDiff implements ISearchProvider {
 
         if (!function_exists("imap_open"))
             throw new FatalException("BackendIMAP(): php-imap module is not installed", 0, null, LOGLEVEL_FATAL);
-            
+
+        /* BEGIN fmbiete's contribution r1527, ZP-319 */
         $this->excludedFolders = array();
-        if( defined('IMAP_EXCLUDED_FOLDERS') ) {
+        if (defined('IMAP_EXCLUDED_FOLDERS')) {
             $this->excludedFolders = explode("|", IMAP_EXCLUDED_FOLDERS);
             ZLog::Write(LOGLEVEL_DEBUG, sprintf("BackendIMAP->Logon(): Excluding Folders (%s)", IMAP_EXCLUDED_FOLDERS));
         }
+        /* END fmbiete's contribution r1527, ZP-319 */
 
         // open the IMAP-mailbox
         $this->mbox = @imap_open($this->server , $username, $password, OP_HALFOPEN);
@@ -458,21 +460,26 @@ class BackendIMAP extends BackendDiff implements ISearchProvider {
         // more debugging
         ZLog::Write(LOGLEVEL_DEBUG, "BackendIMAP->SendMail(): parsed message: ". print_r($message,1));
         ZLog::Write(LOGLEVEL_DEBUG, "BackendIMAP->SendMail(): headers: $headers");
+        /* BEGIN fmbiete's contribution r1528, ZP-320 */
         if (isset($message->headers["subject"])) {
             ZLog::Write(LOGLEVEL_DEBUG, "BackendIMAP->SendMail(): subject: {$message->headers["subject"]}");
         }
         else {
-            ZLog::Write(LOGLEVEL_DEBUG, "BackendIMAP->SendMail(): subject: no subject set");
+            ZLog::Write(LOGLEVEL_DEBUG, "BackendIMAP->SendMail(): subject: no subject set. Set to empty.");
+            $message->headers["subject"] = ""; // added by mku ZP-330
         }
+        /* END fmbiete's contribution r1528, ZP-320 */
         ZLog::Write(LOGLEVEL_DEBUG, "BackendIMAP->SendMail(): body: $body");
 
         if (!defined('IMAP_USE_IMAPMAIL') || IMAP_USE_IMAPMAIL == true) {
-            $send =  @imap_mail ( $toaddr, isset($message->headers["subject"])?$message->headers["subject"]:"", $body, $headers, $ccaddr, $bccaddr);
+            // changed by mku ZP-330
+            $send =  @imap_mail ( $toaddr, $message->headers["subject"], $body, $headers, $ccaddr, $bccaddr);
         }
         else {
             if (!empty($ccaddr))  $headers .= "\nCc: $ccaddr";
             if (!empty($bccaddr)) $headers .= "\nBcc: $bccaddr";
-            $send =  @mail ( $toaddr, isset($message->headers["subject"])?$message->headers["subject"]:"", $body, $headers, $envelopefrom );
+            // changed by mku ZP-330
+            $send =  @mail ( $toaddr, $message->headers["subject"], $body, $headers, $envelopefrom );
         }
 
         // email sent?
@@ -482,7 +489,7 @@ class BackendIMAP extends BackendDiff implements ISearchProvider {
         // add message to the sent folder
         // build complete headers
         $headers .= "\nTo: $toaddr";
-        $headers .= "\nSubject: " . (isset($message->headers["subject"])?$message->headers["subject"]:"");
+        $headers .= "\nSubject: " . $message->headers["subject"]; // changed by mku ZP-330
 
         if (!defined('IMAP_USE_IMAPMAIL') || IMAP_USE_IMAPMAIL == true) {
             if (!empty($ccaddr))  $headers .= "\nCc: $ccaddr";
@@ -572,6 +579,7 @@ class BackendIMAP extends BackendDiff implements ISearchProvider {
         $mobj = new Mail_mimeDecode($mail);
         $message = $mobj->decode(array('decode_headers' => true, 'decode_bodies' => true, 'include_bodies' => true, 'charset' => 'utf-8'));
 
+        /* BEGIN fmbiete's contribution r1528, ZP-320 */
         //trying parts
         $mparts = $message->parts;
         for ($i = 0; $i < count($mparts); $i++) {
@@ -582,7 +590,8 @@ class BackendIMAP extends BackendDiff implements ISearchProvider {
                     $mparts[] = $spart;
             }
         }
-        
+        /* END fmbiete's contribution r1528, ZP-320 */
+
         if (!isset($mparts[$part]->body))
             throw new StatusException(sprintf("BackendIMAP->GetAttachmentData('%s'): Error, requested part key can not be found: '%d'", $attname, $part), SYNC_ITEMOPERATIONSSTATUS_INVALIDATT);
 
@@ -592,14 +601,16 @@ class BackendIMAP extends BackendDiff implements ISearchProvider {
 
         include_once('include/stringstreamwrapper.php');
         $attachment = new SyncItemOperationsAttachment();
+        /* BEGIN fmbiete's contribution r1528, ZP-320 */
         $attachment->data = StringStreamWrapper::Open($mparts[$part]->body);
         if (isset($mparts[$part]->ctype_primary) && isset($mparts[$part]->ctype_secondary))
             $attachment->contenttype = $mparts[$part]->ctype_primary .'/'.$mparts[$part]->ctype_secondary;
-            
+
         unset($mparts);
         unset($message);
-            
+
         ZLog::Write(LOGLEVEL_DEBUG, sprintf("BackendIMAP->GetAttachmentData contenttype %s", $attachment->contenttype));
+        /* END fmbiete's contribution r1528, ZP-320 */
 
         return $attachment;
     }
@@ -708,12 +719,14 @@ class BackendIMAP extends BackendDiff implements ISearchProvider {
             $list = array_reverse($list);
 
             foreach ($list as $val) {
+                /* BEGIN fmbiete's contribution r1527, ZP-319 */
                 // don't return the excluded folders
                 $notExcluded = true;
-                for ($i = 0; $notExcluded && $i < count($this->excludedFolders); $i++) {
-                    if (strpos(strtolower($val->name), strtolower($this->excludedFolders[$i])) !== false) {
+                for ($i = 0, $cnt = count($this->excludedFolders); $notExcluded && $i < $cnt; $i++) { // expr1, expr2 modified by mku ZP-329
+                    // fix exclude folders with special chars by mku ZP-329
+                    if (strpos(strtolower($val->name), strtolower(Utils::Utf7_iconv_encode(Utils::Utf8_to_utf7($this->excludedFolders[$i])))) !== false) {
                         $notExcluded = false;
-                        ZLog::Write(LOGLEVEL_DEBUG, "Pattern: <" . $this->excludedFolders[$i] . "> found, excluding folder: " . $val->name);
+                        ZLog::Write(LOGLEVEL_DEBUG, sprintf("Pattern: <%s> found, excluding folder: '%s'", $this->excludedFolders[$i], $val->name)); // sprintf added by mku ZP-329
                     }
                 }
 
@@ -733,6 +746,7 @@ class BackendIMAP extends BackendDiff implements ISearchProvider {
                         $box["parent"] = "0";
                     }
                     $folders[]=$box;
+                    /* END fmbiete's contribution r1527, ZP-319 */
                 }
             }
         }
@@ -991,7 +1005,7 @@ class BackendIMAP extends BackendDiff implements ISearchProvider {
     public function GetMessage($folderid, $id, $contentparameters) {
         $truncsize = Utils::GetTruncSize($contentparameters->GetTruncation());
         $mimesupport = $contentparameters->GetMimeSupport();
-        $bodypreference = $contentparameters->GetBodyPreference();
+        $bodypreference = $contentparameters->GetBodyPreference(); /* fmbiete's contribution r1528, ZP-320 */
         ZLog::Write(LOGLEVEL_DEBUG, sprintf("BackendIMAP->GetMessage('%s','%s')", $folderid,  $id));
 
         $folderImapid = $this->getImapIdFromFolderId($folderid);
@@ -1002,21 +1016,22 @@ class BackendIMAP extends BackendDiff implements ISearchProvider {
         if ($stat) {
             $this->imap_reopenFolder($folderImapid);
             $mail = @imap_fetchheader($this->mbox, $id, FT_UID) . @imap_body($this->mbox, $id, FT_PEEK | FT_UID);
-            
+
             $mobj = new Mail_mimeDecode($mail);
             $message = $mobj->decode(array('decode_headers' => true, 'decode_bodies' => true, 'include_bodies' => true, 'charset' => 'utf-8'));
-            
+
+            /* BEGIN fmbiete's contribution r1528, ZP-320 */
             $output = new SyncMail();
 
             //Select body type preference
             $bpReturnType = SYNC_BODYPREFERENCE_PLAIN;
             if ($bodypreference !== false) {
-                $bpReturnType = $this->getBodyPreferenceBestMatch($bodypreference);
+                $bpReturnType = Utils::GetBodyPreferenceBestMatch($bodypreference); // changed by mku ZP-330
             }
             ZLog::Write(LOGLEVEL_DEBUG, sprintf("BackendIMAP->GetMessage - getBodyPreferenceBestMatch: %d", $bpReturnType));
-            
+
             //Get body data
-            $this->getBodyRecursive($message, "plain", $plainBody); 
+            $this->getBodyRecursive($message, "plain", $plainBody);
             $this->getBodyRecursive($message, "html", $htmlBody);
             if ($plainBody == "") {
                 $plainBody = Utils::ConvertHtmlToText($htmlBody);
@@ -1026,7 +1041,7 @@ class BackendIMAP extends BackendDiff implements ISearchProvider {
 
             if (Request::GetProtocolVersion() >= 12.0) {
                 $output->asbody = new SyncBaseBody();
-                                             
+
                 switch($bpReturnType) {
                     case SYNC_BODYPREFERENCE_PLAIN:
                         $output->asbody->data = $plainBody;
@@ -1056,7 +1071,7 @@ class BackendIMAP extends BackendDiff implements ISearchProvider {
                 }
 
                 $output->asbody->type = $bpReturnType;
-                $output->nativebodytype = $bpReturnType;              
+                $output->nativebodytype = $bpReturnType;
                 $output->asbody->estimatedDataSize = strlen($output->asbody->data);
 
                 $bpo = $contentparameters->BodyPreference($output->asbody->type);
@@ -1067,8 +1082,10 @@ class BackendIMAP extends BackendDiff implements ISearchProvider {
                     $output->asbody->truncated = 0;
                 }
             }
+            /* END fmbiete's contribution r1528, ZP-320 */
             else { // ASV_2.5
                 $output->bodytruncated = 0;
+                /* BEGIN fmbiete's contribution r1528, ZP-320 */
                 if ($bpReturnType == SYNC_BODYPREFERENCE_MIME) {
                     if (strlen($mail) > $truncsize) {
                         $output->mimedata = Utils::Utf8_truncate($mail, $truncsize);
@@ -1079,27 +1096,29 @@ class BackendIMAP extends BackendDiff implements ISearchProvider {
                         $output->mimedata = $mail;
                     }
                     $output->mimesize = strlen($output->mimedata);
-                } 
-                else {                
+                }
+                else {
                     // truncate body, if requested
                     if (strlen($plainBody) > $truncsize) {
                         $output->body = Utils::Utf8_truncate($plainBody, $truncsize);
                         $output->bodytruncated = 1;
-                    } 
+                    }
                     else {
                         $output->body = $plainBody;
                         $output->bodytruncated = 0;
                     }
                     $output->bodysize = strlen($output->body);
                 }
+                /* END fmbiete's contribution r1528, ZP-320 */
             }
-            
+
             $output->datereceived = isset($message->headers["date"]) ? $this->cleanupDate($message->headers["date"]) : null;
             $output->messageclass = "IPM.Note";
             $output->subject = isset($message->headers["subject"]) ? $message->headers["subject"] : "";
             $output->read = $stat["flags"];
             $output->from = isset($message->headers["from"]) ? $message->headers["from"] : null;
-            
+
+            /* BEGIN fmbiete's contribution r1528, ZP-320 */
             if (isset($message->headers["thread-topic"])) {
                 $output->threadtopic = $message->headers["thread-topic"];
                 /*
@@ -1129,6 +1148,7 @@ class BackendIMAP extends BackendDiff implements ISearchProvider {
                     $output->flag->flagstatus = SYNC_FLAGSTATUS_CLEAR;
                 }
             }
+            /* END fmbiete's contribution r1528, ZP-320 */
 
             $Mail_RFC822 = new Mail_RFC822();
             $toaddr = $ccaddr = $replytoaddr = array();
@@ -1176,7 +1196,7 @@ class BackendIMAP extends BackendDiff implements ISearchProvider {
                     $output->importance = 1;
                 if ($mimeImportance < 3)
                     $output->importance = 2;
-            } else {
+            } else { /* fmbiete's contribution r1528, ZP-320 */
                 $output->importance = 1;
             }
 
@@ -1194,7 +1214,7 @@ class BackendIMAP extends BackendDiff implements ISearchProvider {
                     //add part as attachment if it's disposition indicates so or if it is not a text part
                     if ((isset($part->disposition) && ($part->disposition == "attachment" || $part->disposition == "inline")) ||
                         (isset($part->ctype_primary) && $part->ctype_primary != "text")) {
-                       
+
                         if(isset($part->d_parameters['filename']))
                             $attname = $part->d_parameters['filename'];
                         else if(isset($part->ctype_parameters['name']))
@@ -1203,6 +1223,7 @@ class BackendIMAP extends BackendDiff implements ISearchProvider {
                             $attname = $part->headers['content-description'];
                         else $attname = "unknown attachment";
 
+                        /* BEGIN fmbiete's contribution r1528, ZP-320 */
                         if (Request::GetProtocolVersion() >= 12.0) {
                             if (!isset($output->asattachments) || !is_array($output->asattachments))
                                 $output->asattachments = array();
@@ -1238,7 +1259,8 @@ class BackendIMAP extends BackendDiff implements ISearchProvider {
                             $attachment->attoid = isset($part->headers['content-id']) ? str_replace("<", "", str_replace(">", "", $part->headers['content-id'])) : "";
 
                             array_push($output->attachments, $attachment);
-                        }                        
+                        }
+                        /* END fmbiete's contribution r1528, ZP-320 */
                     }
                 }
             }
@@ -1250,7 +1272,6 @@ class BackendIMAP extends BackendDiff implements ISearchProvider {
 
         return false;
     }
-    
 
     /**
      * Returns message stats, analogous to the folder stats from StatFolder().
@@ -1306,24 +1327,33 @@ class BackendIMAP extends BackendDiff implements ISearchProvider {
      * Called when a message has been changed on the mobile.
      * Added support for FollowUp flag
      *
-     * @param string        $folderid       id of the folder
-     * @param string        $id             id of the message
-     * @param SyncXXX       $message        the SyncObject containing a message
+     * @param string              $folderid            id of the folder
+     * @param string              $id                  id of the message
+     * @param SyncXXX             $message             the SyncObject containing a message
+     * @param ContentParameters   $contentParameters
      *
      * @access public
      * @return array                        same return value as StatMessage()
      * @throws StatusException              could throw specific SYNC_STATUS_* exceptions
      */
-    public function ChangeMessage($folderid, $id, $message) {
+    public function ChangeMessage($folderid, $id, $message, $contentParameters) {
         ZLog::Write(LOGLEVEL_DEBUG, sprintf("BackendIMAP->ChangeMessage('%s','%s','%s')", $folderid, $id, get_class($message)));
-        
+        // TODO this could throw several StatusExceptions like e.g. SYNC_STATUS_OBJECTNOTFOUND, SYNC_STATUS_SYNCCANNOTBECOMPLETED
+
+        // TODO SyncInterval check + ContentParameters
+        // see https://jira.zarafa.com/browse/ZP-258 for details
+        // before changing the message, it should be checked if the message is in the SyncInterval
+        // to determine the cutoffdate use Utils::GetCutOffDate($contentparameters->GetFilterType());
+        // if the message is not in the interval an StatusException with code SYNC_STATUS_SYNCCANNOTBECOMPLETED should be thrown
+
+        /* BEGIN fmbiete's contribution r1529, ZP-321 */
         if (isset($message->flag)) {
             ZLog::Write(LOGLEVEL_DEBUG, sprintf("BackendIMAP->ChangeMessage('Setting flag')"));
 
             $folderImapid = $this->getImapIdFromFolderId($folderid);
 
             $this->imap_reopenFolder($folderImapid);
-           
+
             if (isset($message->flag->flagstatus) && $message->flag->flagstatus == 2) {
                 ZLog::Write(LOGLEVEL_DEBUG, "Set On FollowUp -> IMAP Flagged");
                 $status = @imap_setflag_full($this->mbox, $id, "\\Flagged",ST_UID);
@@ -1332,7 +1362,7 @@ class BackendIMAP extends BackendDiff implements ISearchProvider {
                 ZLog::Write(LOGLEVEL_DEBUG, "Clearing Flagged");
                 $status = @imap_clearflag_full ( $this->mbox, $id, "\\Flagged", ST_UID);
             }
-            
+
             if ($status) {
                 ZLog::Write(LOGLEVEL_DEBUG, "Flagged changed");
             }
@@ -1342,22 +1372,30 @@ class BackendIMAP extends BackendDiff implements ISearchProvider {
         }
 
         return $this->StatMessage($folderid, $id);
+        /* END fmbiete's contribution r1529, ZP-321 */
     }
 
     /**
      * Changes the 'read' flag of a message on disk
      *
-     * @param string        $folderid       id of the folder
-     * @param string        $id             id of the message
-     * @param int           $flags          read flag of the message
+     * @param string              $folderid            id of the folder
+     * @param string              $id                  id of the message
+     * @param int                 $flags               read flag of the message
+     * @param ContentParameters   $contentParameters
      *
      * @access public
      * @return boolean                      status of the operation
      * @throws StatusException              could throw specific SYNC_STATUS_* exceptions
      */
-    public function SetReadFlag($folderid, $id, $flags) {
+    public function SetReadFlag($folderid, $id, $flags, $contentParameters) {
         ZLog::Write(LOGLEVEL_DEBUG, sprintf("BackendIMAP->SetReadFlag('%s','%s','%s')", $folderid, $id, $flags));
         $folderImapid = $this->getImapIdFromFolderId($folderid);
+
+        // TODO SyncInterval check + ContentParameters
+        // see https://jira.zarafa.com/browse/ZP-258 for details
+        // before setting the read flag, it should be checked if the message is in the SyncInterval
+        // to determine the cutoffdate use Utils::GetCutOffDate($contentparameters->GetFilterType());
+        // if the message is not in the interval an StatusException with code SYNC_STATUS_OBJECTNOTFOUND should be thrown
 
         $this->imap_reopenFolder($folderImapid);
 
@@ -1378,12 +1416,13 @@ class BackendIMAP extends BackendDiff implements ISearchProvider {
      * @param string        $folderid       id of the folder
      * @param string        $id             id of the message
      * @param int           $flags          read flag of the message
+     * @param ContentParameters   $contentParameters
      *
      * @access public
      * @return boolean                      status of the operation
      * @throws StatusException              could throw specific SYNC_STATUS_* exceptions
      */
-    public function SetStarFlag($folderid, $id, $flags) {
+    public function SetStarFlag($folderid, $id, $flags, $contentParameters) {
         ZLog::Write(LOGLEVEL_DEBUG, sprintf("BackendIMAP->SetStarFlag('%s','%s','%s')", $folderid, $id, $flags));
         $folderImapid = $this->getImapIdFromFolderId($folderid);
 
@@ -1403,16 +1442,23 @@ class BackendIMAP extends BackendDiff implements ISearchProvider {
     /**
      * Called when the user has requested to delete (really delete) a message
      *
-     * @param string        $folderid       id of the folder
-     * @param string        $id             id of the message
+     * @param string              $folderid             id of the folder
+     * @param string              $id                   id of the message
+     * @param ContentParameters   $contentParameters
      *
      * @access public
      * @return boolean                      status of the operation
      * @throws StatusException              could throw specific SYNC_STATUS_* exceptions
      */
-    public function DeleteMessage($folderid, $id) {
+    public function DeleteMessage($folderid, $id, $contentParameters) {
         ZLog::Write(LOGLEVEL_DEBUG, sprintf("BackendIMAP->DeleteMessage('%s','%s')", $folderid, $id));
         $folderImapid = $this->getImapIdFromFolderId($folderid);
+
+        // TODO SyncInterval check + ContentParameters
+        // see https://jira.zarafa.com/browse/ZP-258 for details
+        // before deleting the message, it should be checked if the message is in the SyncInterval
+        // to determine the cutoffdate use Utils::GetCutOffDate($contentparameters->GetFilterType());
+        // if the message is not in the interval an StatusException with code SYNC_STATUS_OBJECTNOTFOUND should be thrown
 
         $this->imap_reopenFolder($folderImapid);
         $s1 = @imap_delete ($this->mbox, $id, FT_UID);
@@ -1427,19 +1473,25 @@ class BackendIMAP extends BackendDiff implements ISearchProvider {
     /**
      * Called when the user moves an item on the PDA from one folder to another
      *
-     * @param string        $folderid       id of the source folder
-     * @param string        $id             id of the message
-     * @param string        $newfolderid    id of the destination folder
+     * @param string              $folderid            id of the source folder
+     * @param string              $id                  id of the message
+     * @param string              $newfolderid         id of the destination folder
+     * @param ContentParameters   $contentParameters
      *
      * @access public
      * @return boolean                      status of the operation
      * @throws StatusException              could throw specific SYNC_MOVEITEMSSTATUS_* exceptions
      */
-    public function MoveMessage($folderid, $id, $newfolderid) {
+    public function MoveMessage($folderid, $id, $newfolderid, $contentParameters) {
         ZLog::Write(LOGLEVEL_DEBUG, sprintf("BackendIMAP->MoveMessage('%s','%s','%s')", $folderid, $id, $newfolderid));
         $folderImapid = $this->getImapIdFromFolderId($folderid);
         $newfolderImapid = $this->getImapIdFromFolderId($newfolderid);
 
+        // TODO SyncInterval check + ContentParameters
+        // see https://jira.zarafa.com/browse/ZP-258 for details
+        // before moving the message, it should be checked if the message is in the SyncInterval
+        // to determine the cutoffdate use Utils::GetCutOffDate($contentparameters->GetFilterType());
+        // if the message is not in the interval an StatusException with code SYNC_MOVEITEMSSTATUS_INVALIDSOURCEID should be thrown
 
         $this->imap_reopenFolder($folderImapid);
 
@@ -1873,24 +1925,7 @@ class BackendIMAP extends BackendDiff implements ISearchProvider {
             }
         }
     }
-    
-    /**
-     * Returns the best match of preferred body preference types.
-     *
-     * @param array             $bpTypes
-     *
-     * @access private
-     * @return int
-     */
-    private function getBodyPreferenceBestMatch($bpTypes) {
-        // The best choice is RTF, then HTML and then MIME in order to save bandwidth
-        // because MIME is a complete message including the headers and attachments
-        if (in_array(SYNC_BODYPREFERENCE_RTF, $bpTypes))  return SYNC_BODYPREFERENCE_RTF;
-        if (in_array(SYNC_BODYPREFERENCE_HTML, $bpTypes)) return SYNC_BODYPREFERENCE_HTML;
-        if (in_array(SYNC_BODYPREFERENCE_MIME, $bpTypes)) return SYNC_BODYPREFERENCE_MIME;
-        return SYNC_BODYPREFERENCE_PLAIN;
-    }
-    
+
     /**
      * Returns the serverdelimiter for folder parsing
      *
@@ -1919,13 +1954,13 @@ class BackendIMAP extends BackendDiff implements ISearchProvider {
      */
     protected function imap_reopenFolder($folderid, $force = false) {
         // to see changes, the folder has to be reopened!
-        if ($this->mboxFolder != $folderid || $force) {
-            $s = @imap_reopen($this->mbox, $this->server . $folderid);
-            // TODO throw status exception
-            if (!$s) {
-                ZLog::Write(LOGLEVEL_WARN, sprintf("BackendIMAP->imap_reopenFolder('%s'): failed to change folder: ",$folderid, implode(", ", imap_errors())));
+           if ($this->mboxFolder != $folderid || $force) {
+               $s = @imap_reopen($this->mbox, $this->server . $folderid);
+               // TODO throw status exception
+               if (!$s) {
+                ZLog::Write(LOGLEVEL_WARN, "BackendIMAP->imap_reopenFolder('%s'): failed to change folder: ",$folderid, implode(", ", imap_errors()));
                 return false;
-            }
+               }
             $this->mboxFolder = $folderid;
         }
     }
@@ -2099,6 +2134,7 @@ class BackendIMAP extends BackendDiff implements ISearchProvider {
         return $receiveddate;
     }
 
+    /* BEGIN fmbiete's contribution r1528, ZP-320 */
     /**
      * Indicates which AS version is supported by the backend.
      *
@@ -2108,6 +2144,7 @@ class BackendIMAP extends BackendDiff implements ISearchProvider {
     public function GetSupportedASVersion() {
         return ZPush::ASV_14;
     }
+    /* END fmbiete's contribution r1528, ZP-320 */
 };
 
 ?>

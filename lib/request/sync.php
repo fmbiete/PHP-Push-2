@@ -1008,12 +1008,8 @@ class Sync extends RequestProcessor {
             else
                 $this->importer->Config($sc->GetParameter($spa, "state"), $spa->GetConflict());
 
-            // the CPO is also needed by the importer to check if imported changes
-            // are inside the sync window - see ZP-258
-            // TODO ConfigContentParameters needs to be defined in IImportChanges and all implementing importers/backends
-            // this is currently only supported by the Zarafa Backend
-            if (method_exists($this->importer, "ConfigContentParameters"))
-                $this->importer->ConfigContentParameters($spa->GetCPO());
+            // the CPO is also needed by the importer to check if imported changes are inside the sync window - see ZP-258
+            $this->importer->ConfigContentParameters($spa->GetCPO());
         }
         catch (StatusException $stex) {
            $status = $stex->getCode();
@@ -1045,6 +1041,9 @@ class Sync extends RequestProcessor {
         // the importer needs to be available!
         if ($this->importer == false)
             throw StatusException(sprintf("Sync->importMessage(): importer not available", SYNC_STATUS_SERVERERROR));
+
+        // mark this state as used, e.g. for HeartBeat
+        self::$deviceManager->SetHeartbeatStateIntegrity($spa->GetFolderId(), $spa->GetUuid(), $spa->GetUuidCounter());
 
         // Detect incoming loop
         // messages which were created/removed before will not have the same action executed again
