@@ -435,9 +435,17 @@ class BackendCardDAV extends BackendDiff implements ISearchProvider {
                 return false;
             }
 
-            $vcardlist = $this->_carddav->search_vcards($searchquery, 15, true, false);
+            ZLog::Write(LOGLEVEL_DEBUG, sprintf("BackendCardDAV->GetGALSearchResults searching"));
+            try {
+                $url = $this->url . CARDDAV_PRINCIPAL . "/";
+                $this->_carddav->set_url($url);
+                $vcardlist = $this->_carddav->search_vcards($searchquery, 15, true, false);
+            } catch(Exception $e) {
+                $vcardlist = false;
+                ZLog::Write(LOGLEVEL_ERROR, sprintf("BackendCardDAV->GetGALSearchResults : Error in search %s", $e->getMessage()));
+            }
             if ($vcardlist === false) {
-                ZLog::Write(LOGLEVEL_ERROR, "BackendCardDAV: Error in search query. Search aborted");
+                ZLog::Write(LOGLEVEL_ERROR, "BackendCardDAV->GetGALSearchResults : Error in search query. Search aborted");
                 return false;
             }
             
@@ -459,10 +467,10 @@ class BackendCardDAV extends BackendDiff implements ISearchProvider {
             $querycnt = $xmlvcardlist->count();
             //do not return more results as requested in range
             $querylimit = (($rangeend + 1) < $querycnt) ? ($rangeend + 1) : $querycnt;
-            $items['range'] = $rangestart.'-'.($querycnt-1);
+            $items['range'] = $rangestart.'-'.($querylimit - 1);
             $items['searchtotal'] = $querycnt;
             
-            ZLog::Write(LOGLEVEL_DEBUG, sprintf("BackendCardDAV: %s entries found, returning %s to %s", $querycnt, $rangestart, $querylimit));
+            ZLog::Write(LOGLEVEL_DEBUG, sprintf("BackendCardDAV->GetGALSearchResults : %s entries found, returning %s to %s", $querycnt, $rangestart, $querylimit));
             
             $i = 0;
             $rc = 0;
