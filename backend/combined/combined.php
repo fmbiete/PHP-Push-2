@@ -432,7 +432,6 @@ class BackendCombined extends Backend implements ISearchProvider {
                 $version = $subversion;
             }
         }
-        ZLog::Write(LOGLEVEL_DEBUG, sprintf("Combined->GetSupportedASVersion() = %s", $version));
         return $version;
     }
 
