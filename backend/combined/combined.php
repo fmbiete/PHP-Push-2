@@ -419,12 +419,21 @@ class BackendCombined extends Backend implements ISearchProvider {
 
     /**
      * Indicates which AS version is supported by the backend.
+     * Return the lowest version supported by the backends used.
      *
      * @access public
      * @return string       AS version constant
      */
     public function GetSupportedASVersion() {
-        return ZPush::ASV_14;
+        $version = ZPush::ASV_14;
+        foreach ($this->backends as $i => $b) {
+            $subversion = $this->backends[$i]->GetSupportedASVersion();
+            if ($subversion < $version) {
+                $version = $subversion;
+            }
+        }
+        ZLog::Write(LOGLEVEL_DEBUG, sprintf("Combined->GetSupportedASVersion() = %s", $version));
+        return $version;
     }
 
     /**
