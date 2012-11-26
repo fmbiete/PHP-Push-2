@@ -882,7 +882,8 @@ class BackendIMAP extends BackendDiff implements ISearchProvider {
 
         // build name for new mailboxBackendMaildir
         $displayname = Utils::Utf7_iconv_encode(Utils::Utf8_to_utf7($displayname));
-        $newname = $this->server . $folderid . $this->serverdelimiter . $displayname;
+        //$newname = $this->server . $folderid . $this->serverdelimiter . $displayname;
+        $newname = $this->server . $this->getImapIdFromFolderId($folderid) . $this->serverdelimiter . $displayname;
 
         $csts = false;
         // if $id is set => rename mailbox, otherwise create
