@@ -112,6 +112,10 @@ include_once('lib/default/searchprovider.php');
 include_once('lib/request/request.php');
 include_once('lib/request/requestprocessor.php');
 
+/* START - liverpoolfcfan - Simple file based User/Device Access Control (http://z-push.sourceforge.net/phpbb/viewtopic.php?f=5&t=2253) */
+include_once('lib/utils/zpushadmin.php');
+/* END - liverpoolfcfan - Simple file based User/Device Access Control (http://z-push.sourceforge.net/phpbb/viewtopic.php?f=5&t=2253) */
+
 include_once('config.php');
 include_once('version.php');
 
@@ -179,6 +183,13 @@ include_once('version.php');
         }
 
         RequestProcessor::Initialize();
+        
+        /* START - liverpoolfcfan - Simple file based User/Device Access Control (http://z-push.sourceforge.net/phpbb/viewtopic.php?f=5&t=2253) */
+        // Check user's authorization to use Sync - and/or - to use the Device
+        $status = ZPushAdmin::GetUserDevicePermission(Request::GetGETUser(), Request::GetDeviceID());
+        ZLog::Write(LOGLEVEL_INFO, "ZPushAdmin::GetUserDevicePermission returned Status [".$status."]");
+        /* END - liverpoolfcfan - Simple file based User/Device Access Control (http://z-push.sourceforge.net/phpbb/viewtopic.php?f=5&t=2253) */
+
         if(!RequestProcessor::HandleRequest())
             throw new WBXMLException(ZLog::GetWBXMLDebugInfo());
 
