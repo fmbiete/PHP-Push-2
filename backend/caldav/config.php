@@ -1,10 +1,10 @@
 <?php
 /***********************************************
-* File      :   version.php
+* File      :   config.php
 * Project   :   Z-Push
-* Descr     :   version number
+* Descr     :   CalDAV backend configuration file
 *
-* Created   :   18.04.2008
+* Created   :   27.11.2012
 *
 * Copyright 2007 - 2012 Zarafa Deutschland GmbH
 *
@@ -41,7 +41,20 @@
 * Consult LICENSE file for details
 ************************************************/
 
+// ************************
+//  BackendCalDAV settings
+// ************************
+// Server address
+define('CALDAV_SERVER', 'http://calendar.domain.com');
 
-define("ZPUSH_VERSION", "2.0.5-SVN-trunk-r1605");
+// Port
+define('CALDAV_PORT', '80');
+
+// Path 
+define('CALDAV_PATH', '/caldav.php/%u/');
+
+// Personal CalDAV folder (calendar folder/principal)
+define('CALDAV_PERSONAL', 'home');
+
 
 ?>

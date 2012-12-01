@@ -11,6 +11,9 @@
 * Copyright 2012 Jean-Louis Dupond
 ************************************************/
 
+// config file
+require_once("backend/caldav/config.php");
+
 include_once('lib/default/diffbackend/diffbackend.php');
 include_once('include/caldav-client-v2.php');
 include_once('include/z_RTF.php');

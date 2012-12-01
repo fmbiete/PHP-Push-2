@@ -15,6 +15,9 @@
 *
 ************************************************/
 
+// config file
+require_once("backend/carddav/config.php");
+
 include_once('lib/default/diffbackend/diffbackend.php');
 include_once('include/carddav.php');
 include_once('include/z_RTF.php');

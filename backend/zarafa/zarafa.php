@@ -45,6 +45,9 @@
 * Consult LICENSE file for details
 *************************************************/
 
+// config file
+require_once("backend/zarafa/config.php");
+
 // include PHP-MAPI classes
 include_once('backend/zarafa/mapi/mapi.util.php');
 include_once('backend/zarafa/mapi/mapidefs.php');
@@ -848,7 +851,7 @@ class BackendZarafa implements IBackend, ISearchProvider {
         if(!$mapimessage)
             throw new StatusException(sprintf("BackendZarafa->MeetingResponse('%s','%s', '%s'): Error, unable to open request message for response 0x%X", $requestid, $folderid, $response, mapi_last_hresult()), SYNC_MEETRESPSTATUS_INVALIDMEETREQ);
 
-        $meetingrequest = new Meetingrequest($this->store, $mapimessage);
+        $meetingrequest = new Meetingrequest($this->store, $mapimessage, $this->session);
 
         if(!$meetingrequest->isMeetingRequest())
             throw new StatusException(sprintf("BackendZarafa->MeetingResponse('%s','%s', '%s'): Error, attempt to respond to non-meeting request", $requestid, $folderid, $response), SYNC_MEETRESPSTATUS_INVALIDMEETREQ);
@@ -877,6 +880,11 @@ class BackendZarafa implements IBackend, ISearchProvider {
         $calendarid = "";
         if (isset($entryid)) {
             $newitem = mapi_msgstore_openentry($this->store, $entryid);
+            // new item might be in a delegator's store. ActiveSync does not support accepting them.
+            if (!$newitem) {
+                throw new StatusException(sprintf("BackendZarafa->MeetingResponse('%s','%s', '%s'): Object with entryid '%s' was not found in user's store (0x%X). It might be in a delegator's store.", $requestid, $folderid, $response, bin2hex($entryid), mapi_last_hresult()), SYNC_MEETRESPSTATUS_SERVERERROR, null, LOGLEVEL_WARN);
+            }
+
             $newprops = mapi_getprops($newitem, array(PR_SOURCE_KEY));
             $calendarid = bin2hex($newprops[PR_SOURCE_KEY]);
         }

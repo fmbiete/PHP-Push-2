@@ -203,12 +203,21 @@ class MAPIUtils {
                             array(
                                 array(RES_CONTENT, array(FUZZYLEVEL => FL_SUBSTRING | FL_IGNORECASE, ULPROPTAG => PR_DISPLAY_NAME, VALUE => $query)),
                                 array(RES_CONTENT, array(FUZZYLEVEL => FL_SUBSTRING | FL_IGNORECASE, ULPROPTAG => PR_ACCOUNT, VALUE => $query)),
+                                array(RES_CONTENT, array(FUZZYLEVEL => FL_SUBSTRING | FL_IGNORECASE, ULPROPTAG => PR_SMTP_ADDRESS, VALUE => $query)),
                             ), // RES_OR
                         ),
-                        array(
-                            RES_PROPERTY,
-                            array(RELOP => RELOP_EQ, ULPROPTAG => PR_OBJECT_TYPE, VALUE => MAPI_MAILUSER)
-                        )
+                        array(RES_OR,
+                            array (
+                                array(
+                                        RES_PROPERTY,
+                                        array(RELOP => RELOP_EQ, ULPROPTAG => PR_OBJECT_TYPE, VALUE => MAPI_MAILUSER)
+                                ),
+                                array(
+                                        RES_PROPERTY,
+                                        array(RELOP => RELOP_EQ, ULPROPTAG => PR_OBJECT_TYPE, VALUE => MAPI_DISTLIST)
+                                )
+                            )
+                        ) // RES_OR
                     ) // RES_AND
         );
     }

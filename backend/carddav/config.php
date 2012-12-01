@@ -1,10 +1,10 @@
 <?php
 /***********************************************
-* File      :   version.php
+* File      :   config.php
 * Project   :   Z-Push
-* Descr     :   version number
+* Descr     :   CardDAV backend configuration file
 *
-* Created   :   18.04.2008
+* Created   :   27.11.2012
 *
 * Copyright 2007 - 2012 Zarafa Deutschland GmbH
 *
@@ -41,7 +41,20 @@
 * Consult LICENSE file for details
 ************************************************/
 
+// ************************
+//  BackendCardDAV settings
+// ************************
+// Server address
+define('CARDDAV_SERVER', 'http://contacts.domain.com');
 
-define("ZPUSH_VERSION", "2.0.5-SVN-trunk-r1605");
+// Server Port
+define('CARDDAV_PORT', '80');
 
+// Address book path
+define('CARDDAV_PATH', '/caldav.php/%u/');
+
+// Principal name
+define('CARDDAV_PRINCIPAL', 'addresses');
+    
+    
 ?>

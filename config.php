@@ -157,84 +157,24 @@
     // default: 100 - value used if mobile does not limit amount of items
     define('SYNC_MAX_ITEMS', 100);
 
+    // The devices usually send a list of supported properties for calendar and contact
+    // items. If a device does not includes such a supported property in Sync request,
+    // it means the property's value will be deleted on the server.
+    // However some devices do not send a list of supported properties. It is then impossible
+    // to tell if a property was deleted or it was not set at all if it does not appear in Sync.
+    // This parameter defines Z-Push behaviour during Sync if a device does not issue a list with
+    // supported properties.
+    // See also https://jira.zarafa.com/browse/ZP-302.
+    // Possible values:
+    // false - do not unset properties which are not sent during Sync (default)
+    // true  - unset properties which are not sent during Sync
+    define('UNSET_UNDEFINED_PROPERTIES', false);
+
 /**********************************************************************************
  *  Backend settings
  */
-    // The data providers that we are using (see configuration below)
-    //define('BACKEND_PROVIDER', "BackendZarafa");
-    define('BACKEND_PROVIDER', "BackendIMAP");
-
-
-    // ************************
-    //  BackendZarafa settings
-    // ************************
-    // Defines the server to which we want to connect
-    define('MAPI_SERVER', 'file:///var/run/zarafa');
-
-
-    // ************************
-    //  BackendIMAP settings
-    // ************************
-    // Defines the server to which we want to connect
-    define('IMAP_SERVER', 'localhost');
-    // connecting to default port (143)
-    define('IMAP_PORT', 143);
-    // best cross-platform compatibility (see http://php.net/imap_open for options)
-    define('IMAP_OPTIONS', '/notls/norsh');
-    // overwrite the "from" header if it isn't set when sending emails
-    // options: 'username'    - the username will be set (usefull if your login is equal to your emailaddress)
-    //        'domain'    - the value of the "domain" field is used
-    //        '@mydomain.com' - the username is used and the given string will be appended
-    define('IMAP_DEFAULTFROM', '');
-    // copy outgoing mail to this folder. If not set z-push will try the default folders
-    define('IMAP_SENTFOLDER', '');
-    // forward messages inline (default false - as attachment)
-    define('IMAP_INLINE_FORWARD', false);
-    // use imap_mail() to send emails (default) - if false mail() is used
-    define('IMAP_USE_IMAPMAIL', true);
-    /* BEGIN fmbiete's contribution r1527, ZP-319 */
-    // list of folders we want to exclude from sync. Names, or part of it, separated by |
-    // example: dovecot.sieve|archive|spam
-    define('IMAP_EXCLUDED_FOLDERS', '');
-    /* END fmbiete's contribution r1527, ZP-319 */
-
-
-    // ************************
-    //  BackendMaildir settings
-    // ************************
-    define('MAILDIR_BASE', '/tmp');
-    define('MAILDIR_SUBDIR', 'Maildir');
-
-    // **********************
-    //  BackendVCardDir settings
-    // **********************
-    define('VCARDDIR_DIR', '/home/%u/.kde/share/apps/kabc/stdvcf');
-
-    // **********************
-    //  BackendCalDAV settings
-    // **********************
-    define('CALDAV_SERVER', 'http://calendar.domain.com');
-    define('CALDAV_PORT', '80');
-    define('CALDAV_PATH', '/caldav.php/%u/');
-    define('CALDAV_PERSONAL', 'home'); //Personal CalDAV folder
-
-    // **********************
-    //  BackendCardDAV settings
-    // **********************
-    define('CARDDAV_SERVER', 'http://contacts.domain.com');
-    define('CARDDAV_PORT', '80');
-    define('CARDDAV_PATH', '/caldav.php/%u/');
-    define('CARDDAV_PRINCIPAL', 'addresses'); //Personal CardDAV folder
-
-    
-    // **********************
-    //  BackendLDAP settings
-    // **********************
-    define('LDAP_SERVER', 'localhost');
-    define('LDAP_SERVER_PORT', '389');
-    define('LDAP_USER_DN', 'uid=%u,ou=mailaccount,dc=phppush,dc=com');
-    define('LDAP_BASE_DNS', 'Contacts:ou=addressbook,uid=%u,ou=mailaccount,dc=phppush,dc=com'); //Multiple values separator is |
-
+    // the backend data provider
+    define('BACKEND_PROVIDER', '');
 
 /**********************************************************************************
  *  Search provider settings

@@ -43,6 +43,9 @@
 * Consult LICENSE file for details
 ************************************************/
 
+// config file
+require_once("backend/imap/config.php");
+
 include_once('lib/default/diffbackend/diffbackend.php');
 include_once('include/mimeDecode.php');
 require_once('include/z_RFC822.php');
@@ -882,7 +885,6 @@ class BackendIMAP extends BackendDiff implements ISearchProvider {
 
         // build name for new mailboxBackendMaildir
         $displayname = Utils::Utf7_iconv_encode(Utils::Utf8_to_utf7($displayname));
-        //$newname = $this->server . $folderid . $this->serverdelimiter . $displayname;
         $newname = $this->server . $this->getImapIdFromFolderId($folderid) . $this->serverdelimiter . $displayname;
 
         $csts = false;

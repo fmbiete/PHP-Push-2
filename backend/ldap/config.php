@@ -1,10 +1,10 @@
 <?php
 /***********************************************
-* File      :   version.php
+* File      :   config.php
 * Project   :   Z-Push
-* Descr     :   version number
+* Descr     :   CardDAV backend configuration file
 *
-* Created   :   18.04.2008
+* Created   :   27.11.2012
 *
 * Copyright 2007 - 2012 Zarafa Deutschland GmbH
 *
@@ -41,7 +41,20 @@
 * Consult LICENSE file for details
 ************************************************/
 
+// ************************
+//  BackendCardDAV settings
+// ************************
+// Server address
+define('LDAP_SERVER', 'localhost');
 
-define("ZPUSH_VERSION", "2.0.5-SVN-trunk-r1605");
+// Server Port
+define('LDAP_SERVER_PORT', '389');
 
+// LDAP USER DN
+define('LDAP_USER_DN', 'uid=%u,ou=mailaccount,dc=phppush,dc=com');
+
+// LDAP BASE DNS
+define('LDAP_BASE_DNS', 'Contacts:ou=addressbook,uid=%u,ou=mailaccount,dc=phppush,dc=com'); //Multiple values separator is |
+    
+    
 ?>
