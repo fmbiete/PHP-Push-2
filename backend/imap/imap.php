@@ -1608,12 +1608,11 @@ class BackendIMAP extends BackendDiff implements ISearchProvider {
         $search = true;
 
         if (empty($searchFolderId)) {
-            $folderId = $this->getFolderIdFromImapId('INBOX');
-            $searchFolderId = $folderId;
+            $searchFolderId = $this->getFolderIdFromImapId('INBOX');
         }
 
-        // Convert folderId to IMAP id
-        $imapId = $this->getImapIdFromFolderId($folderId);
+        // Convert searchFolderId to IMAP id
+        $imapId = $this->getImapIdFromFolderId($searchFolderId);
 
         $listMessages = array();
         $numMessages = 0;
@@ -1648,7 +1647,7 @@ class BackendIMAP extends BackendDiff implements ISearchProvider {
                 if ($subList !== false) {
                     $numMessages += count($subList);
                     ZLog::Write(LOGLEVEL_DEBUG, sprintf("BackendIMAP->GetMailboxSearchResults: Search in %s : %s ocurrences", $imapId, count($subList)));
-                    $listMessages[] = array($folderId => $subList);
+                    $listMessages[] = array($searchFolderId => $subList);
                 }
             }
         }
@@ -1657,7 +1656,7 @@ class BackendIMAP extends BackendDiff implements ISearchProvider {
         if ($numMessages > 0) {
             // range for the search results
             $rangestart = 0;
-            $rangeend = SEARCH_MAXRESULTS;
+            $rangeend = SEARCH_MAXRESULTS - 1;
 
             if (is_array($searchRange) && isset($searchRange[0]) && isset($searchRange[1])) {
                 $rangestart = $searchRange[0];
@@ -1670,14 +1669,11 @@ class BackendIMAP extends BackendDiff implements ISearchProvider {
             $items['range'] = $rangestart.'-'.($querylimit - 1);
             $items['searchtotal'] = $querycnt;
                         
-            ZLog::Write(LOGLEVEL_DEBUG, sprintf("BackendIMAP->GetMailboxSearchResults: %s entries found, returning %s to %s", $querycnt, $rangestart, ($querylimit - 1)));
+            ZLog::Write(LOGLEVEL_DEBUG, sprintf("BackendIMAP->GetMailboxSearchResults: %s entries found, returning %s", $items['searchtotal'], $items['range']));
 
             $p = 0;
             $pc = 0;
             for ($i = $rangestart, $j = 0; $i <= $rangeend && $i < $querycnt; $i++, $j++) {
-                $items[$j]['class'] = 'Email';
-                //$items[$j]['longid'] = $prefix . $searchFolderId . ":" . $list[$i];
-                //$items[$j]['folderid'] = $prefix . $searchFolderId;
                 $keys = array_keys($listMessages[$p]);
                 $cntFolder = count($listMessages[$p][$keys[0]]);
                 if ($pc >= $cntFolder) {
@@ -1687,6 +1683,7 @@ class BackendIMAP extends BackendDiff implements ISearchProvider {
                 }
                 ZLog::Write(LOGLEVEL_DEBUG, sprintf("BackendIMAP->GetMailboxSearchResults: %s %s %s %s", $p, $pc, $keys[0], $listMessages[$p][$keys[0]][$pc]));
                 $foundFolderId = $keys[0];
+                $items[$j]['class'] = 'Email';
                 $items[$j]['longid'] = $prefix . $foundFolderId . ":" . $listMessages[$p][$foundFolderId][$pc];
                 $items[$j]['folderid'] = $prefix . $foundFolderId;
                 $pc++;

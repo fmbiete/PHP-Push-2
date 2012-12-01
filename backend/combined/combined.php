@@ -502,6 +502,8 @@ class BackendCombined extends Backend implements ISearchProvider {
 
         $result = false;
         if ($i !== false) {
+            //Convert $cpo GetSearchFolderid
+            $cpo->SetSearchFolderid($this->GetBackendFolder($cpo->GetSearchFolderid()));
             $result = $this->backends[$i]->GetMailboxSearchResults($cpo, $i . $this->config['delimiter']);
         }
         
