@@ -97,6 +97,9 @@ class ZPush {
     // Webservice commands
     const COMMAND_WEBSERVICE_DEVICE = -100;
 
+    // Latest supported State version
+    const STATE_VERSION = IStateMachine::STATEVERSION_02;
+
     static private $autoloadBackendPreference = array(
                     "BackendZarafa",
                     "BackendCombined",
@@ -317,8 +320,9 @@ class ZPush {
      * which has to be an IStateMachine implementation
      *
      * @access public
-     * @return object   implementation of IStateMachine
      * @throws FatalNotImplementedException
+     * @throws HTTPReturnCodeException
+     * @return object   implementation of IStateMachine
      */
     static public function GetStateMachine() {
         if (!isset(ZPush::$stateMachine)) {
@@ -338,8 +342,23 @@ class ZPush {
                 include_once('lib/default/filestatemachine.php');
                 ZPush::$stateMachine = new FileStateMachine();
             }
+
+            if (ZPush::$stateMachine->GetStateVersion() !== ZPush::GetLatestStateVersion()) {
+                if (class_exists("TopCollector")) self::GetTopCollector()->AnnounceInformation("Run migration script!", true);
+                throw new HTTPReturnCodeException(sprintf("The state version available to the %s is not the latest version - please run the state upgrade script. See release notes for more information.", get_class(ZPush::$stateMachine), 503));
+            }
         }
         return ZPush::$stateMachine;
+    }
+
+    /**
+     * Returns the latest version of supported states
+     *
+     * @access public
+     * @return int
+     */
+    static public function GetLatestStateVersion() {
+        return self::STATE_VERSION;
     }
 
     /**
@@ -451,7 +470,7 @@ class ZPush {
             $ourBackend = @constant('BACKEND_PROVIDER');
 
             // if no backend provider is defined, try to include automatically
-            if ($ourBackend === false || $ourBackend == "") {
+            if ($ourBackend == false || $ourBackend == "") {
                 $loaded = false;
                 foreach (self::$autoloadBackendPreference as $autoloadBackend) {
                     ZLog::Write(LOGLEVEL_DEBUG, sprintf("ZPush::GetBackend(): trying autoload backend '%s'", $autoloadBackend));
