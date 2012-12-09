@@ -1,10 +1,14 @@
 <?php
 /***********************************************
-* File      :   version.php
+* File      :   syncresolverecipentsoptions.php
 * Project   :   Z-Push
-* Descr     :   version number
+* Descr     :   WBXML appointment entities that can be
+*               parsed directly (as a stream) from WBXML.
+*               It is automatically decoded
+*               according to $mapping,
+*               and the Sync WBXML mappings
 *
-* Created   :   18.04.2008
+* Created   :   28.10.2012
 *
 * Copyright 2007 - 2012 Zarafa Deutschland GmbH
 *
@@ -41,7 +45,28 @@
 * Consult LICENSE file for details
 ************************************************/
 
+class SyncRROptions extends SyncObject {
+    public $certificateretrieval;
+    public $maxcertificates;
+    public $maxambiguousrecipients;
+    public $availability;
+    public $picture;
 
-define("ZPUSH_VERSION", "2.0.5-SVN-trunk-r1622");
+    public function SyncRROptions() {
+        $mapping = array (
+            SYNC_RESOLVERECIPIENTS_CERTIFICATERETRIEVAL     => array (  self::STREAMER_VAR      => "certificateretrieval"),
+            SYNC_RESOLVERECIPIENTS_MAXCERTIFICATES          => array (  self::STREAMER_VAR      => "maxcertificates"),
+            SYNC_RESOLVERECIPIENTS_MAXAMBIGUOUSRECIPIENTS   => array (  self::STREAMER_VAR      => "maxambiguousrecipients"),
 
+            SYNC_RESOLVERECIPIENTS_AVAILABILITY             => array (  self::STREAMER_VAR      => "availability",
+                                                                        self::STREAMER_TYPE     => "SyncRRAvailability"),
+
+            SYNC_RESOLVERECIPIENTS_PICTURE                  => array (  self::STREAMER_VAR      => "picture",
+                                                                        self::STREAMER_TYPE     => "SyncRRPicture"),
+        );
+
+        parent::SyncObject($mapping);
+    }
+
+}
 ?>

@@ -1,10 +1,14 @@
 <?php
 /***********************************************
-* File      :   version.php
+* File      :   syncresolverecipentsavailability.php
 * Project   :   Z-Push
-* Descr     :   version number
+* Descr     :   WBXML appointment entities that can be
+*               parsed directly (as a stream) from WBXML.
+*               It is automatically decoded
+*               according to $mapping,
+*               and the Sync WBXML mappings
 *
-* Created   :   18.04.2008
+* Created   :   28.12.2012
 *
 * Copyright 2007 - 2012 Zarafa Deutschland GmbH
 *
@@ -41,7 +45,22 @@
 * Consult LICENSE file for details
 ************************************************/
 
+class SyncRRAvailability extends SyncObject {
+    public $starttime;
+    public $endtime;
+    public $status;
+    public $mergedfreebusy;
 
-define("ZPUSH_VERSION", "2.0.5-SVN-trunk-r1622");
+    public function SyncRRAvailability() {
+        $mapping = array (
+            SYNC_RESOLVERECIPIENTS_STARTTIME                => array (  self::STREAMER_VAR      => "starttime"),
+            SYNC_RESOLVERECIPIENTS_ENDTIME                  => array (  self::STREAMER_VAR      => "endtime"),
+            SYNC_RESOLVERECIPIENTS_STATUS                   => array (  self::STREAMER_VAR      => "status"),
+            SYNC_RESOLVERECIPIENTS_MERGEDFREEBUSY           => array (  self::STREAMER_VAR      => "mergedfreebusy"),
+        );
 
+        parent::SyncObject($mapping);
+    }
+
+}
 ?>

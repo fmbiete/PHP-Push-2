@@ -1,10 +1,14 @@
 <?php
 /***********************************************
-* File      :   version.php
+* File      :   syncresolverecipents.php
 * Project   :   Z-Push
-* Descr     :   version number
+* Descr     :   WBXML appointment entities that can be
+*               parsed directly (as a stream) from WBXML.
+*               It is automatically decoded
+*               according to $mapping,
+*               and the Sync WBXML mappings
 *
-* Created   :   18.04.2008
+* Created   :   28.10.2012
 *
 * Copyright 2007 - 2012 Zarafa Deutschland GmbH
 *
@@ -41,7 +45,31 @@
 * Consult LICENSE file for details
 ************************************************/
 
+class SyncResolveRecipients extends SyncObject {
+    public $to = array();
+    public $options;
+    public $status;
+    public $recipientCount;
+    public $recipient;
 
-define("ZPUSH_VERSION", "2.0.5-SVN-trunk-r1622");
+    public function SyncResolveRecipients() {
+        $mapping = array (
+            SYNC_RESOLVERECIPIENTS_TO                       => array (  self::STREAMER_VAR      => "to",
+                                                                        self::STREAMER_ARRAY    => SYNC_RESOLVERECIPIENTS_TO,
+                                                                        self::STREAMER_PROP     => self::STREAMER_TYPE_NO_CONTAINER),
 
+            SYNC_RESOLVERECIPIENTS_OPTIONS                  => array (  self::STREAMER_VAR      => "options",
+                                                                        self::STREAMER_TYPE     => "SyncRROptions"),
+
+            SYNC_RESOLVERECIPIENTS_STATUS                   => array (  self::STREAMER_VAR      => "status"),
+            SYNC_RESOLVERECIPIENTS_RECIPIENTCOUNT           => array (  self::STREAMER_VAR      => "recipientcount"),
+
+            SYNC_RESOLVERECIPIENTS_RECIPIENT                => array (  self::STREAMER_VAR      => "recipient",
+                                                                        self::STREAMER_TYPE     => "SyncResolveRecipient"),
+        );
+
+        parent::SyncObject($mapping);
+    }
+
+}
 ?>

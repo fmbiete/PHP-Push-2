@@ -1,10 +1,14 @@
 <?php
 /***********************************************
-* File      :   version.php
+* File      :   syncresolverecipentscertificates.php
 * Project   :   Z-Push
-* Descr     :   version number
+* Descr     :   WBXML appointment entities that can be
+*               parsed directly (as a stream) from WBXML.
+*               It is automatically decoded
+*               according to $mapping,
+*               and the Sync WBXML mappings
 *
-* Created   :   18.04.2008
+* Created   :   28.10.2012
 *
 * Copyright 2007 - 2012 Zarafa Deutschland GmbH
 *
@@ -41,7 +45,30 @@
 * Consult LICENSE file for details
 ************************************************/
 
+class SyncRRCertificates extends SyncObject {
+    public $status;
+    public $certificatecount;
+    public $recipientcount;
+    public $certificate;
+    public $minicertificate;
 
-define("ZPUSH_VERSION", "2.0.5-SVN-trunk-r1622");
+    public function SyncRRCertificates() {
+        $mapping = array (
+            SYNC_RESOLVERECIPIENTS_STATUS                   => array (  self::STREAMER_VAR      => "status"),
+            SYNC_RESOLVERECIPIENTS_CERTIFICATECOUNT         => array (  self::STREAMER_VAR      => "certificatecount"),
+            SYNC_RESOLVERECIPIENTS_RECIPIENTCOUNT           => array (  self::STREAMER_VAR      => "recipientcount"),
 
+            SYNC_RESOLVERECIPIENTS_CERTIFICATE              => array (  self::STREAMER_VAR      => "certificate",
+                                                                        self::STREAMER_ARRAY    => SYNC_RESOLVERECIPIENTS_CERTIFICATE,
+                                                                        self::STREAMER_PROP     => self::STREAMER_TYPE_NO_CONTAINER),
+
+            SYNC_RESOLVERECIPIENTS_MINICERTIFICATE          => array (  self::STREAMER_VAR      => "minicertificate",
+                                                                        self::STREAMER_ARRAY    => SYNC_RESOLVERECIPIENTS_MINICERTIFICATE,
+                                                                        self::STREAMER_PROP     => self::STREAMER_TYPE_NO_CONTAINER)
+        );
+
+        parent::SyncObject($mapping);
+    }
+
+}
 ?>

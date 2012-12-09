@@ -1,10 +1,14 @@
 <?php
 /***********************************************
-* File      :   version.php
+* File      :   syncvalidatecert.php
 * Project   :   Z-Push
-* Descr     :   version number
+* Descr     :   WBXML appointment entities that can be
+*               parsed directly (as a stream) from WBXML.
+*               It is automatically decoded
+*               according to $mapping,
+*               and the Sync WBXML mappings
 *
-* Created   :   18.04.2008
+* Created   :   08.11.2011
 *
 * Copyright 2007 - 2012 Zarafa Deutschland GmbH
 *
@@ -41,7 +45,28 @@
 * Consult LICENSE file for details
 ************************************************/
 
+class SyncValidateCert extends SyncObject {
+    public $certificatechain;
+    public $certificates;
+    public $checkCRL;
+    public $Status;
 
-define("ZPUSH_VERSION", "2.0.5-SVN-trunk-r1622");
+    public function SyncValidateCert() {
+        $mapping = array (
+            SYNC_VALIDATECERT_CERTIFICATECHAIN  => array (  self::STREAMER_VAR      => "certificatechain",
+                                                            self::STREAMER_ARRAY    => SYNC_VALIDATECERT_CERTIFICATE),
 
+            SYNC_VALIDATECERT_CERTIFICATES      => array (  self::STREAMER_VAR      => "certificates",
+                                                            self::STREAMER_ARRAY    => SYNC_VALIDATECERT_CERTIFICATE),
+
+            SYNC_VALIDATECERT_CHECKCRL          => array (  self::STREAMER_VAR      => "checkCRL"),
+
+            SYNC_SETTINGS_PROP_STATUS           => array (  self::STREAMER_VAR      => "Status",
+                                                            self::STREAMER_TYPE     => self::STREAMER_TYPE_IGNORE)
+        );
+
+        parent::SyncObject($mapping);
+    }
+
+}
 ?>
