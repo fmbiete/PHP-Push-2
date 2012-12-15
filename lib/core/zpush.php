@@ -105,9 +105,7 @@ class ZPush {
                     "BackendCombined",
                     "BackendIMAP",
                     "BackendVCardDir",
-                    "BackendMaildir",
-                    "BackendCalDAV",
-                    "BackendCardDAV"
+                    "BackendMaildir"
                 );
 
     static private $supportedASVersions = array(
@@ -138,8 +136,8 @@ class ZPush {
                     self::COMMAND_MOVEITEMS         => array(self::ASV_1,  self::REQUESTHANDLER => "MoveItems"),
                     self::COMMAND_GETITEMESTIMATE   => array(self::ASV_1,  self::REQUESTHANDLER => "GetItemEstimate"),
                     self::COMMAND_MEETINGRESPONSE   => array(self::ASV_1,  self::REQUESTHANDLER => "MeetingResponse"),
-                    self::COMMAND_RESOLVERECIPIENTS => array(self::ASV_1,  self::REQUESTHANDLER => false),
-                    self::COMMAND_VALIDATECERT      => array(self::ASV_1,  self::REQUESTHANDLER => false),
+                    self::COMMAND_RESOLVERECIPIENTS => array(self::ASV_1,  self::REQUESTHANDLER => "ResolveRecipients"),
+                    self::COMMAND_VALIDATECERT      => array(self::ASV_1,  self::REQUESTHANDLER => "ValidateCert"),
                     self::COMMAND_PROVISION         => array(self::ASV_25, self::REQUESTHANDLER => "Provisioning",  self::UNAUTHENTICATED, self::UNPROVISIONED),
                     self::COMMAND_SEARCH            => array(self::ASV_1,  self::REQUESTHANDLER => "Search"),
                     self::COMMAND_PING              => array(self::ASV_2,  self::REQUESTHANDLER => "Ping",          self::UNPROVISIONED),
@@ -237,6 +235,10 @@ class ZPush {
 
         if (!touch(LOGERRORFILE))
             throw new FatalMisconfigurationException("The configured LOGERRORFILE can not be modified.");
+
+        // check ownership on the (eventually) just created files
+        Utils::FixFileOwner(LOGFILE);
+        Utils::FixFileOwner(LOGERRORFILE);
 
         // set time zone
         // code contributed by Robert Scheck (rsc) - more information: https://developer.berlios.de/mantis/view.php?id=479

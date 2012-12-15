@@ -52,6 +52,9 @@ define('ZPUSH_BASE_PATH', "../src");
  * MAIN
 */
 try {
+    if (!isset($_SERVER["TERM"]) || !isset($_SERVER["LOGNAME"]))
+        die("This script should not be called in a browser.");
+
     if (!defined('ZPUSH_BASE_PATH') || !file_exists(ZPUSH_BASE_PATH . "/config.php"))
         die("ZPUSH_BASE_PATH not set correctly or no config.php file found\n");
 
@@ -81,7 +84,7 @@ try {
     $migrate = new StateMigrator20xto210();
 
     if (!$migrate->MigrationNecessary())
-        die("No migration necessary. Aborting!\n");
+        echo "Migration script was run before and eventually no migration is necessary. Rerunning checks\n";
 
     $migrate->DoMigration();
 }

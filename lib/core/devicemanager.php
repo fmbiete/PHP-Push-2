@@ -611,6 +611,19 @@ class DeviceManager {
     }
 
     /**
+     * Announces that the current process is a push connection to the process loop
+     * detection and to the Top collector
+     *
+     * @access public
+     * @return boolean
+     */
+    public function AnnounceProcessAsPush() {
+        ZLog::Write(LOGLEVEL_DEBUG, "Announce process as PUSH connection");
+
+        return $this->loopdetection->ProcessLoopDetectionSetAsPush() && ZPush::GetTopCollector()->SetAsPushConnection();
+    }
+
+    /**
      * Checks if the given counter for a certain uuid+folderid was already exported or modified.
      * This is called when a heartbeat request found changes to make sure that the same
      * changes are not exported twice, as during the heartbeat there could have been a normal
@@ -658,18 +671,17 @@ class DeviceManager {
             // only update if there is a change
             if ($statusflag !== $currentStatus[ASDevice::FOLDERSYNCSTATUS] && $statusflag != self::FLD_SYNC_COMPLETED) {
                 $this->device->SetFolderSyncStatus($folderid, array(ASDevice::FOLDERSYNCSTATUS => $statusflag));
-                ZLog::Write(LOGLEVEL_WARN, sprintf("SetFolderSyncStatus(): set %s for %s", $statusflag, $folderid));
+                ZLog::Write(LOGLEVEL_DEBUG, sprintf("SetFolderSyncStatus(): set %s for %s", $statusflag, $folderid));
             }
             // if completed, remove the status
             else if ($statusflag == self::FLD_SYNC_COMPLETED) {
                 $this->device->SetFolderSyncStatus($folderid, false);
-                ZLog::Write(LOGLEVEL_WARN, sprintf("SetFolderSyncStatus(): completed for %s", $folderid));
+                ZLog::Write(LOGLEVEL_DEBUG, sprintf("SetFolderSyncStatus(): completed for %s", $folderid));
             }
         }
 
         return true;
     }
-
 
     /**
      * Indicates if the device needs an AS version update
