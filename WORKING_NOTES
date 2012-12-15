@@ -1,1 +1,45 @@
-"flags" -> "read"
+---    public function BackendIMAP() {
+---    public function Logon($username, $domain, $password) {
+---    public function Logoff() {
+    public function SendMail($sm) {
+---    public function GetWasteBasket() {
+---    public function GetAttachmentData($attname) {
+---    public function HasChangesSink() {
+---    public function ChangesSinkInitialize($folderid) {
+---    public function ChangesSink($timeout = 30) {
+---    public function GetFolderList() {
+---    public function GetFolder($id) {
+---    public function StatFolder($id) {
+---    public function ChangeFolder($folderid, $oldid, $displayname, $type){
+    public function DeleteFolder($id, $parentid){
+    public function GetMessageList($folderid, $cutoffdate) {
+    public function GetMessage($folderid, $id, $contentparameters) {
+    public function StatMessage($folderid, $id) {
+    public function ChangeMessage($folderid, $id, $message, $contentParameters) {
+    public function SetReadFlag($folderid, $id, $flags, $contentParameters) {
+    public function SetStarFlag($folderid, $id, $flags, $contentParameters) {
+    public function DeleteMessage($folderid, $id, $contentParameters) {
+    public function MoveMessage($folderid, $id, $newfolderid, $contentParameters) {
+    public function GetSearchProvider() {
+    public function SupportsType($searchtype) {
+    public function GetGALSearchResults($searchquery, $searchrange) {
+    public function GetMailboxSearchResults($cpo, $prefix = '') {
+    public function TerminateSearch($pid) {
+    public function Disconnect() {
+    private function getSearchRestriction($cpo) {
+    protected function getImapIdFromFolderId($folderid) {
+    protected function getFolderIdFromImapId($imapid) {
+    protected function convertImapId($imapid) {
+    protected function getBody($message) {
+    protected function getBodyRecursive($message, $subtype, &$body) {
+/*    protected function imap_reopenFolder($folderid, $force = false) {
+    protected function mail_attach($filenm,$filesize,$file_cont,$body, $body_ct, $body_cte, $boundary = false) {
+    protected function enc_multipart($boundary, $body, $body_ct, $body_cte) {
+    protected function enc_attach_file($boundary, $filenm, $filesize, $file_cont, $content_type = "") {
+    protected function addSentMessage($folderid, $header, $body) {
+    protected function parseAddr($ad) {
+    protected function getModAndParentNames($fhir, &$displayname, &$parent) {
+    protected function checkIfIMAPFolder($folderName) {
+    protected function cleanupDate($receiveddate) {
+    public function GetSupportedASVersion() {
+

@@ -1,10 +1,10 @@
 <?php
 /***********************************************
-* File      :   config.php
+* File      :   imaplibray.php
 * Project   :   Z-Push
-* Descr     :   IMAP backend configuration file
+* Descr     :   IMAP library abstract class
 *
-* Created   :   27.11.2012
+* Created   :   10.12.2012
 *
 * Copyright 2007 - 2012 Zarafa Deutschland GmbH
 *
@@ -41,47 +41,11 @@
 * Consult LICENSE file for details
 ************************************************/
 
-// ************************
-//  IMAP Libraries
-// ************************
-require_once("backend/imap/imaplibrary.php");
-require_once("backend/imap/imapnative.php");
-
-// Define the IMAP Library used (default IMAPNative)
-define('IMAP_LIBRARY', '');
-
-// ************************
-//  BackendIMAP settings
-// ************************
-
-// Defines the server to which we want to connect
-define('IMAP_SERVER', 'localhost');
-
-// connecting to default port (143)
-define('IMAP_PORT', 143);
-
-// best cross-platform compatibility (see http://php.net/imap_open for options)
-define('IMAP_OPTIONS', '/notls/norsh');
-
-// overwrite the "from" header if it isn't set when sending emails
-// options: 'username'    - the username will be set (usefull if your login is equal to your emailaddress)
-//        'domain'    - the value of the "domain" field is used
-//        '@mydomain.com' - the username is used and the given string will be appended
-define('IMAP_DEFAULTFROM', '');
-
-// copy outgoing mail to this folder. If not set z-push will try the default folders
-define('IMAP_SENTFOLDER', '');
-
-// forward messages inline (default false - as attachment)
-define('IMAP_INLINE_FORWARD', false);
-
-// use imap_mail() to send emails (default) - if false mail() is used
-define('IMAP_USE_IMAPMAIL', true);
-
-/* BEGIN fmbiete's contribution r1527, ZP-319 */
-// list of folders we want to exclude from sync. Names, or part of it, separated by |
-// example: dovecot.sieve|archive|spam
-define('IMAP_EXCLUDED_FOLDERS', '');
-/* END fmbiete's contribution r1527, ZP-319 */
+abstract class IMAPLibrary {
+    //IMAP object/connection
+    protected $imap;
+    
+    public abstract function DriverFound();
+}
 
 ?>
