@@ -69,8 +69,9 @@ class BackendIMAP extends BackendDiff implements ISearchProvider {
         $this->sentID = false;
         $this->mboxFolder = "";
 
-        if (!function_exists("imap_open"))
+        if (!function_exists("imap_open")) {
             throw new FatalException("BackendIMAP(): php-imap module is not installed", 0, null, LOGLEVEL_FATAL);
+        }
     }
 
     /**----------------------------------------------------------------------------------------------------------
@@ -171,10 +172,9 @@ class BackendIMAP extends BackendDiff implements ISearchProvider {
                                             Utils::PrintAsString((isset($sm->source->folderid) ? $sm->source->folderid : false)),
                                             Utils::PrintAsString(($sm->saveinsent)), Utils::PrintAsString(isset($sm->replacemime)) ));
 
-        if (isset($sm->source->folderid) && $sm->source->folderid)
-            // convert parent folder id back to work on an imap-id
+        if (isset($sm->source->folderid)) {
             $parent = $this->getImapIdFromFolderId($sm->source->folderid);
-
+        }
 
         // by splitting the message in several lines we can easily grep later
         foreach(preg_split("/((\r)?\n)/", $sm->mime) as $rfc822line)
@@ -182,7 +182,7 @@ class BackendIMAP extends BackendDiff implements ISearchProvider {
 
         $mobj = new Mail_mimeDecode($sm->mime);
         $message = $mobj->decode(array('decode_headers' => false, 'decode_bodies' => true, 'include_bodies' => true, 'charset' => 'utf-8'));
-
+        
         $Mail_RFC822 = new Mail_RFC822();
         $toaddr = $ccaddr = $bccaddr = "";
         if(isset($message->headers["to"]))
@@ -202,90 +202,96 @@ class BackendIMAP extends BackendDiff implements ISearchProvider {
 
         // clean up the transmitted headers
         // remove default headers because we are using imap_mail
-        $changedfrom = false;
+        $existingFrom = false;
         $returnPathSet = false;
         $body_base64 = false;
         $org_charset = "";
         $org_boundary = false;
         $multipartmixed = false;
         foreach($message->headers as $k => $v) {
-            if ($k == "subject" || $k == "to" || $k == "cc" || $k == "bcc")
-                continue;
+            $addHeader = true;
+            switch ($k) {
+                case "subject":
+                case "to":
+                case "cc":
+                case "bcc":
+                    $addHeader = false;
+                    break;
+                    
+                case "content-type":
+                    // if the message is a multipart message, then we should use the sent body
+                    if (preg_match("/multipart/i", $v)) {
+                        $use_orgbody = true;
+                        $org_boundary = $message->ctype_parameters["boundary"];
+                    }
 
-            if ($k == "content-type") {
-                // if the message is a multipart message, then we should use the sent body
-                if (preg_match("/multipart/i", $v)) {
-                    $use_orgbody = true;
-                    $org_boundary = $message->ctype_parameters["boundary"];
-                }
+                    // save the original content-type header for the body part when forwarding
+                    if ($sm->forwardflag && !$use_orgbody) {
+                        $forward_h_ct = $v;
+                        $addHeader = false;
+                    }
 
-                // save the original content-type header for the body part when forwarding
-                if ($sm->forwardflag && !$use_orgbody) {
-                    $forward_h_ct = $v;
-                    continue;
-                }
-
-                // set charset always to utf-8
-                $org_charset = $v;
-                $v = preg_replace("/charset=([A-Za-z0-9-\"']+)/", "charset=\"utf-8\"", $v);
-            }
-
-            if ($k == "content-transfer-encoding") {
-                // if the content was base64 encoded, encode the body again when sending
-                if (trim($v) == "base64") $body_base64 = true;
-
-                // save the original encoding header for the body part when forwarding
-                if ($sm->forwardflag) {
-                    $forward_h_cte = $v;
-                    continue;
-                }
-            }
+                    // set charset always to utf-8
+                    $org_charset = $v;
+                    $v = preg_replace("/charset=([A-Za-z0-9-\"']+)/", "charset=\"utf-8\"", $v);
+                    break;
+                    
+                case "content-transfer-encoding":
+                    // if the content was base64 encoded, encode the body again when sending
+                    if (trim($v) == "base64") {
+                        $body_base64 = true;
+                    }
+                    // save the original encoding header for the body part when forwarding
+                    if ($sm->forwardflag) {
+                        $forward_h_cte = $v;
+                        $addHeader = false;
+                    }
+                    break;
 
             // check if "from"-header is set, do nothing if it's set
             // else set it to IMAP_DEFAULTFROM
-            if ($k == "from") {
-                if (trim($v)) {
-                    $changedfrom = true;
-                } elseif (! trim($v) && IMAP_DEFAULTFROM) {
-                    $changedfrom = true;
-                    if      (IMAP_DEFAULTFROM == 'username') $v = $this->username;
-                    else if (IMAP_DEFAULTFROM == 'domain')   $v = $this->domain;
-                    else $v = $this->username . IMAP_DEFAULTFROM;
+                case "from":
+                    $existingFrom = true;
+                    // Empty From, but default defined
+                    if (!trim($v) && IMAP_DEFAULTFROM) {
+                        $v = $this->getDefaultFromValue();
+                    }
                     $envelopefrom = "-f$v";
-                }
-            }
+                    break;
 
-            // check if "Return-Path"-header is set
-            if ($k == "return-path") {
-                $returnPathSet = true;
-                if (! trim($v) && IMAP_DEFAULTFROM) {
-                    if      (IMAP_DEFAULTFROM == 'username') $v = $this->username;
-                    else if (IMAP_DEFAULTFROM == 'domain')   $v = $this->domain;
-                    else $v = $this->username . IMAP_DEFAULTFROM;
-                }
+                // check if "Return-Path"-header is set
+                case "return-path":
+                    $returnPathSet = true;
+                    if (!trim($v) && IMAP_DEFAULTFROM) {
+                        $v = $this->getDefaultFromValue();
+                    }
+                    break;
             }
-
-            // all other headers stay
-            if ($headers) $headers .= "\n";
-            $headers .= ucfirst($k) . ": ". $v;
+            if ($addHeader) {
+                // all other headers stay
+                if ($headers) {
+                    $headers .= "\n";
+                }
+                $headers .= ucfirst($k) . ": ". $v;
+            }
         }
 
         // set "From" header if not set on the device
-        if(IMAP_DEFAULTFROM && !$changedfrom){
-            if      (IMAP_DEFAULTFROM == 'username') $v = $this->username;
-            else if (IMAP_DEFAULTFROM == 'domain')   $v = $this->domain;
-            else $v = $this->username . IMAP_DEFAULTFROM;
-            if ($headers) $headers .= "\n";
+        if (!$existingFrom && IMAP_DEFAULTFROM) {
+            $v = $this->getDefaultFromValue();
+            if ($headers) {
+                $headers .= "\n";
+            }
             $headers .= 'From: '.$v;
             $envelopefrom = "-f$v";
         }
 
         // set "Return-Path" header if not set on the device
         if(IMAP_DEFAULTFROM && !$returnPathSet){
-            if      (IMAP_DEFAULTFROM == 'username') $v = $this->username;
-            else if (IMAP_DEFAULTFROM == 'domain')   $v = $this->domain;
-            else $v = $this->username . IMAP_DEFAULTFROM;
-            if ($headers) $headers .= "\n";
+            $v = $this->getDefaultFromValue();
+            if ($headers) {
+                $headers .= "\n";
+            }
             $headers .= 'Return-Path: '.$v;
         }
 
@@ -294,29 +300,45 @@ class BackendIMAP extends BackendDiff implements ISearchProvider {
             list(,$body) = $mobj->_splitBodyHeader($sm->mime);
             $repl_body = $this->getBody($message);
         }
-        else
+        else {
             $body = $this->getBody($message);
+        }
+        
+        ZLog::Write(LOGLEVEL_DEBUG, "Body before reply: ". $body);
 
         // reply
         if ($sm->replyflag && $parent) {
             $this->imap_reopenFolder($parent);
             // receive entire mail (header + body) to decode body correctly
-            $origmail = @imap_fetchheader($this->mbox, $reply, FT_UID) . @imap_body($this->mbox, $reply, FT_PEEK | FT_UID);
-            if (!$origmail)
+            $replyMail = @imap_fetchheader($this->mbox, $reply, FT_UID) . @imap_body($this->mbox, $reply, FT_PEEK | FT_UID);
+            if (!$replyMail) {
                 throw new StatusException(sprintf("BackendIMAP->SendMail(): Could not open message id '%s' in folder id '%s' to be replied: %s", $reply, $parent, imap_last_error()), SYNC_COMMONSTATUS_ITEMNOTFOUND);
+            }
 
-            $mobj2 = new Mail_mimeDecode($origmail);
-            // receive only body
-            $body .= $this->getBody($mobj2->decode(array('decode_headers' => false, 'decode_bodies' => true, 'include_bodies' => true, 'charset' => 'utf-8')));
-            // unset mimedecoder & origmail - free memory
-            unset($mobj2);
-            unset($origmail);
+            $replyMail = new Mail_mimeDecode($replyMail);
+            $replyMessage = $replyMail->decode(array('decode_headers' => false, 'decode_bodies' => true, 'include_bodies' => true, 'charset' => 'utf-8'));
+            $replyBody = "";
+            $this->getBodyRecursive($replyMessage, "html", $replyBody);
+            if (strlen(trim($replyBody)) == 0) {
+                $this->getBodyRecursive($replyMessage, "text", $replyBody);
+                $body .= "\r\n\r\n" . $replyBody;
+            }
+            else {
+                $body .= "<br><br>" . $replyBody;
+            }
+            
+            ZLog::Write(LOGLEVEL_DEBUG, "Body after reply: ". $body);
+
+            unset($replyBody);
+            unset($replyMessage);
+            unset($replyMail);
         }
 
         // encode the body to base64 if it was sent originally in base64 by the pda
         // contrib - chunk base64 encoded body
-        if ($body_base64 && !$sm->forwardflag) $body = chunk_split(base64_encode($body));
-
+        if ($body_base64 && !$sm->forwardflag) {
+            $body = chunk_split(base64_encode($body));
+        }
 
         // forward
         if ($sm->forwardflag && $parent) {
@@ -324,19 +346,21 @@ class BackendIMAP extends BackendDiff implements ISearchProvider {
             // receive entire mail (header + body)
             $origmail = @imap_fetchheader($this->mbox, $forward, FT_UID) . @imap_body($this->mbox, $forward, FT_PEEK | FT_UID);
 
-            if (!$origmail)
+            if (!$origmail) {
                 throw new StatusException(sprintf("BackendIMAP->SendMail(): Could not open message id '%s' in folder id '%s' to be forwarded: %s", $forward, $parent, imap_last_error()), SYNC_COMMONSTATUS_ITEMNOTFOUND);
+            }
 
             if (!defined('IMAP_INLINE_FORWARD') || IMAP_INLINE_FORWARD === false) {
                 // contrib - chunk base64 encoded body
-                if ($body_base64) $body = chunk_split(base64_encode($body));
+                if ($body_base64) {
+                    $body = chunk_split(base64_encode($body));
+                }
                 //use original boundary if it's set
                 $boundary = ($org_boundary) ? $org_boundary : false;
                 // build a new mime message, forward entire old mail as file
                 list($aheader, $body) = $this->mail_attach("forwarded_message.eml",strlen($origmail),$origmail, $body, $forward_h_ct, $forward_h_cte,$boundary);
                 // add boundary headers
                 $headers .= "\n" . $aheader;
-
             }
             else {
                 $mobj2 = new Mail_mimeDecode($origmail);
@@ -452,9 +476,13 @@ class BackendIMAP extends BackendDiff implements ISearchProvider {
         $body = str_replace("\r\n", "\n", $body);
 
         if (!$multipartmixed) {
-            if (!empty($forward_h_ct)) $headers .= "\nContent-Type: $forward_h_ct";
-            if (!empty($forward_h_cte)) $headers .= "\nContent-Transfer-Encoding: $forward_h_cte";
-        //  if body was quoted-printable, convert it again
+            if (!empty($forward_h_ct)) {
+                $headers .= "\nContent-Type: $forward_h_ct";
+            }
+            if (!empty($forward_h_cte)) {
+                $headers .= "\nContent-Transfer-Encoding: $forward_h_cte";
+            }
+            //  if body was quoted-printable, convert it again
             if (isset($message->headers["content-transfer-encoding"]) && strtolower($message->headers["content-transfer-encoding"]) == "quoted-printable") {
                 $body = quoted_printable_encode($body);
             }
@@ -479,15 +507,20 @@ class BackendIMAP extends BackendDiff implements ISearchProvider {
             $send =  @imap_mail ( $toaddr, $message->headers["subject"], $body, $headers, $ccaddr, $bccaddr);
         }
         else {
-            if (!empty($ccaddr))  $headers .= "\nCc: $ccaddr";
-            if (!empty($bccaddr)) $headers .= "\nBcc: $bccaddr";
+            if (!empty($ccaddr)) {
+                $headers .= "\nCc: $ccaddr";
+            }
+            if (!empty($bccaddr)) {
+                $headers .= "\nBcc: $bccaddr";
+            }
             // changed by mku ZP-330
             $send =  @mail ( $toaddr, $message->headers["subject"], $body, $headers, $envelopefrom );
         }
 
         // email sent?
-        if (!$send)
+        if (!$send) {
             throw new StatusException(sprintf("BackendIMAP->SendMail(): The email could not be sent. Last IMAP-error: %s", imap_last_error()), SYNC_COMMONSTATUS_MAILSUBMISSIONFAILED);
+        }
 
         // add message to the sent folder
         // build complete headers
@@ -495,8 +528,12 @@ class BackendIMAP extends BackendDiff implements ISearchProvider {
         $headers .= "\nSubject: " . $message->headers["subject"]; // changed by mku ZP-330
 
         if (!defined('IMAP_USE_IMAPMAIL') || IMAP_USE_IMAPMAIL == true) {
-            if (!empty($ccaddr))  $headers .= "\nCc: $ccaddr";
-            if (!empty($bccaddr)) $headers .= "\nBcc: $bccaddr";
+            if (!empty($ccaddr)) {
+                $headers .= "\nCc: $ccaddr";
+            }
+            if (!empty($bccaddr)) {
+                $headers .= "\nBcc: $bccaddr";
+            }
         }
         ZLog::Write(LOGLEVEL_DEBUG, "BackendIMAP->SendMail(): complete headers: $headers");
 
@@ -2133,6 +2170,28 @@ class BackendIMAP extends BackendDiff implements ISearchProvider {
 
         return $receiveddate;
     }
+    
+    /**
+     * Returns the default value for "From"
+     *
+     * @access private
+     * @return string
+     */
+    private function getDefaultFromValue() {
+        $v = "";
+        if (IMAP_DEFAULTFROM == 'username') {
+            $v = $this->username;
+        }
+        else if (IMAP_DEFAULTFROM == 'domain') {
+            $v = $this->domain;
+        }
+        else {
+            $v = $this->username . IMAP_DEFAULTFROM;
+        }
+        
+        return $v;
+    }
+
 
     /* BEGIN fmbiete's contribution r1528, ZP-320 */
     /**
