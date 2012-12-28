@@ -88,21 +88,22 @@ class IMAPNative extends IMAPLibrary {
     
     public function Logoff() {
         if ($this->mbox) {
-        // list all errors
-        $errors = imap_errors();
-        if (is_array($errors)) {
-            foreach ($errors as $e) {
-                if (stripos($e, "fail") !== false) {
-                    $level = LOGLEVEL_WARN;
+            // list all errors
+            $errors = imap_errors();
+            if (is_array($errors)) {
+                foreach ($errors as $e) {
+                    if (stripos($e, "fail") !== false) {
+                        $level = LOGLEVEL_WARN;
+                    }
+                    else {
+                        $level = LOGLEVEL_DEBUG;
+                    }
+                    ZLog::Write($level, "IMAPNative->Logoff(): IMAP Server said: " . $e);
                 }
-                else {
-                    $level = LOGLEVEL_DEBUG;
-                }
-                ZLog::Write($level, "IMAPNative->Logoff(): IMAP Server said: " . $e);
             }
+            @imap_close($this->mbox);
+            unset($this->mbox);
         }
-        @imap_close($this->mbox);
-        unset($this->mbox);
     }
     
     public function GetWasteBasket() {
@@ -282,7 +283,7 @@ class IMAPNative extends IMAPLibrary {
     }
 
 
-    public function GetMessage($folderid, $imapFolderid, $id, $contentparameters) {
+    public function GetMessage($folderid, $imapFolderid, $id, $contentparameters, $stat) {
         $truncsize = Utils::GetTruncSize($contentparameters->GetTruncation());
         $mimesupport = $contentparameters->GetMimeSupport();
         $bodypreference = $contentparameters->GetBodyPreference();
@@ -552,6 +553,10 @@ class IMAPNative extends IMAPLibrary {
         return $output;
     }
     
+    public function GetServerDelimiter() {
+        return $this->serverdelimiter;
+    }
+    
     public function StatMessage($imapFolderid, $id) {
         $overview = $this->FetchMessage($imapFolderid, $id, false);
         if (!$overview) {
@@ -745,14 +750,14 @@ class IMAPNative extends IMAPLibrary {
                 return @imap_fetchheader($this->mbox, $id, FT_UID) . @imap_body($this->mbox, $id, FT_PEEK | FT_UID);
             }
             else {
-                return @imap_fetch_overview($this->mbox, $id);
+                return @imap_fetch_overview($this->mbox, $id, FT_UID);
             }
         }
         return false;
     }
 
 
-        /**
+    /**
      * Recursive way to get mod and parent - repeat until only one part is left
      * or the folder is identified as an IMAP folder
      *
@@ -773,7 +778,11 @@ class IMAPNative extends IMAPLibrary {
             return;
         }
         //recursion magic
-        $this->getModAndParentNames($fhir, $displayname, $parent);
+        $this->GetModAndParentNames($fhir, $displayname, $parent);
+    }
+    
+    public function AddSentMessage($folderid, $fullmessage) {
+        return @imap_append($this->mbox, $this->server . $folderid, $fullmessage, "\\Seen");
     }
 
     /**
@@ -785,11 +794,21 @@ class IMAPNative extends IMAPLibrary {
      * @return boolean
      */
     private function checkIfIMAPFolder($folderName) {
-        $parent = imap_list($this->mbox, $this->server, $folderName);
+        $parent = @imap_list($this->mbox, $this->server, $folderName);
         if ($parent === false) return false;
         return true;
     }
     
+    /**
+     * Helper to re-initialize the folder to speed things up
+     * Remember what folder is currently open and only change if necessary
+     *
+     * @param string        $folderid       id of the folder
+     * @param boolean       $force          re-open the folder even if currently opened
+     *
+     * @access protected
+     * @return
+     */
     private function imap_reopenFolder($folderid, $force = false) {
         // to see changes, the folder has to be reopened!
         if ($this->mboxFolder != $folderid || $force) {

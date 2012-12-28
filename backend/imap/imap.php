@@ -54,12 +54,6 @@ require_once('include/z_RFC822.php');
 class BackendIMAP extends BackendDiff implements ISearchProvider {
     protected $wasteID;
     protected $sentID;
-    //protected $server;
-    //protected $mbox;
-    //protected $mboxFolder;
-    //protected $username;
-    //protected $domain;
-    //protected $serverdelimiter;
     protected $sinkfolders;
     protected $sinkstates;
     protected $excludedFolders; /* fmbiete's contribution r1527, ZP-319 */
@@ -73,10 +67,14 @@ class BackendIMAP extends BackendDiff implements ISearchProvider {
         if (defined('IMAP_LIBRARY')) {
             switch (IMAP_LIBRARY) {
                 case 'IMAPNative':
+                case '';
                     $this->imapLib = new IMAPNative();
                     break;
                 case 'IMAPHorde':
                     $this->imapLib = new IMAPHorde();
+                    break;
+                default:
+                    throw new FatalException(sprintf("BackendIMAP(): Driver IMAP unknown: %s", IMAP_LIBRARY), 0, null, LOGLEVEL_FATAL);
                     break;
             }
         }
@@ -84,8 +82,9 @@ class BackendIMAP extends BackendDiff implements ISearchProvider {
             $this->imapLib = new IMAPNative();
         }
 
-        if (!$this->imapLib->IsDriverFound())
+        if (!$this->imapLib->IsDriverFound()) {
             throw new FatalException("BackendIMAP(): Driver IMAP is not installed", 0, null, LOGLEVEL_FATAL);
+        }
     }
 
     /**----------------------------------------------------------------------------------------------------------
@@ -120,7 +119,7 @@ class BackendIMAP extends BackendDiff implements ISearchProvider {
             return true;
         }
         else {
-            ZLog::Write(LOGLEVEL_ERROR, sprintf("BackendIMAP->Logon(): can't connect as user %s: %s", $username, imap_last_error()));
+            ZLog::Write(LOGLEVEL_ERROR, sprintf("BackendIMAP->Logon(): can't connect as user %s: %s", $username, $this->imapLib->GetLastError()));
             return false;
         }
     }
@@ -280,10 +279,10 @@ class BackendIMAP extends BackendDiff implements ISearchProvider {
         // if this is a multipart message with a boundary, we must use the original body
         if ($use_orgbody) {
             list(,$body) = $mobj->_splitBodyHeader($sm->mime);
-            $repl_body = $this->getBody($message);
+            $repl_body = $this->imapLib->getBody($message);
         }
         else {
-            $body = $this->getBody($message);
+            $body = $this->imapLib->getBody($message);
         }
 
         // reply
@@ -294,7 +293,7 @@ class BackendIMAP extends BackendDiff implements ISearchProvider {
 
             $mobj2 = new Mail_mimeDecode($origmail);
             // receive only body
-            $body .= $this->getBody($mobj2->decode(array('decode_headers' => false, 'decode_bodies' => true, 'include_bodies' => true, 'charset' => 'utf-8')));
+            $body .= $this->imapLib->getBody($mobj2->decode(array('decode_headers' => false, 'decode_bodies' => true, 'include_bodies' => true, 'charset' => 'utf-8')));
             // unset mimedecoder & origmail - free memory
             unset($mobj2);
             unset($origmail);
@@ -353,7 +352,7 @@ class BackendIMAP extends BackendDiff implements ISearchProvider {
                     $nbody .= "Subject: " . $mess2->headers['subject'] . "\r\n";
                 }
                 $nbody .= "\r\n";
-                $nbody .= $this->getBody($mess2);
+                $nbody .= $this->imapLib->getBody($mess2);
 
                 if ($body_base64) {
                     // contrib - chunk base64 encoded body
@@ -497,6 +496,7 @@ class BackendIMAP extends BackendDiff implements ISearchProvider {
         if (!defined('IMAP_USE_IMAPMAIL') || IMAP_USE_IMAPMAIL == true) {
             if (!empty($ccaddr)) {
                 $headers .= "\nCc: $ccaddr";
+            }
             if (!empty($bccaddr)) {
                 $headers .= "\nBcc: $bccaddr";
             }
@@ -640,9 +640,9 @@ class BackendIMAP extends BackendDiff implements ISearchProvider {
 
         while($stopat > time() && empty($notifications)) {
             foreach ($this->sinkfolders as $imapid) {
-                $status = $this->imapLib->ChangeSink($imapid);
+                $status = $this->imapLib->ChangesSink($imapid);
                 if ($status === false) {
-                    ZLog::Write(LOGLEVEL_WARN, sprintf("ChangesSink: could not stat folder '%s': %s ", $this->getFolderIdFromImapId($imapid), imap_last_error()));
+                    ZLog::Write(LOGLEVEL_WARN, sprintf("ChangesSink: could not stat folder '%s': %s ", $this->getFolderIdFromImapId($imapid), $this->imapLib->GetLastError()));
                 }
                 else {
                     if (! isset($this->sinkstates[$imapid]) )
@@ -694,7 +694,7 @@ class BackendIMAP extends BackendDiff implements ISearchProvider {
 
                     $fhir = explode($folder["delimiter"], $folder["name"]);
                     if (count($fhir) > 1) {
-                        $this->imapLib->getModAndParentNames($fhir, $box["mod"], $imapparent);
+                        $this->imapLib->GetModAndParentNames($fhir, $box["mod"], $imapparent);
                         $box["parent"] = $this->convertImapId($imapparent);
                     }
                     else {
@@ -729,7 +729,7 @@ class BackendIMAP extends BackendDiff implements ISearchProvider {
         $imapid = $this->getImapIdFromFolderId($id);
 
         // explode hierarchy
-        $fhir = explode($this->serverdelimiter, $imapid);
+        $fhir = explode($this->imapLib->GetServerDelimiter(), $imapid);
 
         // compare on lowercase strings
         switch (strtolower($imapid)) {
@@ -900,7 +900,7 @@ class BackendIMAP extends BackendDiff implements ISearchProvider {
         $stat = $this->StatMessage($folderid, $id);
 
         if ($stat) {
-            return $this->imapLib->GetMessage($folderid, $folderImapid, $id, $contentparameters);
+            return $this->imapLib->GetMessage($folderid, $folderImapid, $id, $contentparameters, $stat);
         }
 
         return false;
@@ -1373,75 +1373,8 @@ class BackendIMAP extends BackendDiff implements ISearchProvider {
     }
 
 
-    /**
-     * Parses the message and return only the plaintext body
-     *
-     * @param string        $message        html message
-     *
-     * @access protected
-     * @return string       plaintext message
-     */
-    protected function getBody($message) {
-        $body = "";
-        $htmlbody = "";
 
-        $this->getBodyRecursive($message, "plain", $body);
 
-        if($body === "") {
-            $this->getBodyRecursive($message, "html", $body);
-        }
-
-        return $body;
-    }
-
-    /**
-     * Get all parts in the message with specified type and concatenate them together, unless the
-     * Content-Disposition is 'attachment', in which case the text is apparently an attachment
-     *
-     * @param string        $message        mimedecode message(part)
-     * @param string        $message        message subtype
-     * @param string        &$body          body reference
-     *
-     * @access protected
-     * @return
-     */
-    protected function getBodyRecursive($message, $subtype, &$body) {
-        if(!isset($message->ctype_primary)) return;
-        if(strcasecmp($message->ctype_primary,"text")==0 && strcasecmp($message->ctype_secondary,$subtype)==0 && isset($message->body))
-            $body .= $message->body;
-
-        if(strcasecmp($message->ctype_primary,"multipart")==0 && isset($message->parts) && is_array($message->parts)) {
-            foreach($message->parts as $part) {
-                if(!isset($part->disposition) || strcasecmp($part->disposition,"attachment"))  {
-                    $this->getBodyRecursive($part, $subtype, $body);
-                }
-            }
-        }
-    }
-
-    /**
-     * Helper to re-initialize the folder to speed things up
-     * Remember what folder is currently open and only change if necessary
-     *
-     * @param string        $folderid       id of the folder
-     * @param boolean       $force          re-open the folder even if currently opened
-     *
-     * @access protected
-     * @return
-     */
-/*    protected function imap_reopenFolder($folderid, $force = false) {
-        // to see changes, the folder has to be reopened!
-           if ($this->mboxFolder != $folderid || $force) {
-               $s = @imap_reopen($this->mbox, $this->server . $folderid);
-               // TODO throw status exception
-               if (!$s) {
-                ZLog::Write(LOGLEVEL_WARN, "BackendIMAP->imap_reopenFolder('%s'): failed to change folder: ",$folderid, implode(", ", imap_errors()));
-                return false;
-               }
-            $this->mboxFolder = $folderid;
-        }
-    }
-*/
 
     /**
      * Build a multipart RFC822, embedding body and one file (for attachments)
@@ -1457,7 +1390,7 @@ class BackendIMAP extends BackendDiff implements ISearchProvider {
      * @access protected
      * @return array        with [0] => $mail_header and [1] => $mail_body
      */
-    protected function mail_attach($filenm,$filesize,$file_cont,$body, $body_ct, $body_cte, $boundary = false) {
+    protected function mail_attach($filenm, $filesize, $file_cont, $body, $body_ct, $body_cte, $boundary = false) {
         if (!$boundary) $boundary = strtoupper(md5(uniqid(time())));
 
         //remove the ending boundary because we will add it at the end
@@ -1531,8 +1464,8 @@ class BackendIMAP extends BackendDiff implements ISearchProvider {
      */
     protected function addSentMessage($folderid, $header, $body) {
         $header_body = str_replace("\n", "\r\n", str_replace("\r", "", $header . "\n\n" . $body));
-
-        return @imap_append($this->mbox, $this->server . $folderid, $header_body, "\\Seen");
+        
+        return $this->imapLib->AddSentMessage($folderid, $header_body);
     }
 
     /**

@@ -29,15 +29,15 @@
 ---    private function getSearchRestriction($cpo) {
 ---    protected function getImapIdFromFolderId($folderid) {
 ---    protected function getFolderIdFromImapId($imapid) {
-    protected function convertImapId($imapid) {
-    protected function getBody($message) {
-    protected function getBodyRecursive($message, $subtype, &$body) {
+---    protected function convertImapId($imapid) {
+---    protected function getBody($message) {
+---    protected function getBodyRecursive($message, $subtype, &$body) {
 ---    protected function imap_reopenFolder($folderid, $force = false) {
-    protected function mail_attach($filenm,$filesize,$file_cont,$body, $body_ct, $body_cte, $boundary = false) {
-    protected function enc_multipart($boundary, $body, $body_ct, $body_cte) {
-    protected function enc_attach_file($boundary, $filenm, $filesize, $file_cont, $content_type = "") {
-    protected function addSentMessage($folderid, $header, $body) {
-    protected function parseAddr($ad) {
+---    protected function mail_attach($filenm,$filesize,$file_cont,$body, $body_ct, $body_cte, $boundary = false) {
+---    protected function enc_multipart($boundary, $body, $body_ct, $body_cte) {
+---    protected function enc_attach_file($boundary, $filenm, $filesize, $file_cont, $content_type = "") {
+---    protected function addSentMessage($folderid, $header, $body) {
+---    protected function parseAddr($ad) {
 ---    protected function getModAndParentNames($fhir, &$displayname, &$parent) {
 ---    protected function checkIfIMAPFolder($folderName) {
 ---    protected function cleanupDate($receiveddate) {
