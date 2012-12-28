@@ -275,6 +275,10 @@ class BackendCombined extends Backend implements ISearchProvider {
      */
     public function SendMail($sm) {
         ZLog::Write(LOGLEVEL_DEBUG, "Combined->SendMail()");
+        // Convert source folderid
+        if (isset($sm->source->folderid)) {
+            $sm->source->folderid = $this->GetBackendFolder($sm->source->folderid);
+        }
         foreach ($this->backends as $i => $b){
             if($this->backends[$i]->SendMail($sm) == true){
                 return true;
