@@ -1554,10 +1554,12 @@ class BackendIMAP extends BackendDiff implements ISearchProvider {
         // before moving the message, it should be checked if the message is in the SyncInterval
         // to determine the cutoffdate use Utils::GetCutOffDate($contentparameters->GetFilterType());
         // if the message is not in the interval an StatusException with code SYNC_MOVEITEMSSTATUS_INVALIDSOURCEID should be thrown
+        
+        if ($folderImapid == $newfolderImapid) {
+            throw new StatusException(sprintf("BackendIMAP->MoveMessage('%s','%s','%s'): Error, destination folder is source folder. Canceling the move.", $folderid, $id, $newfolderid), SYNC_MOVEITEMSSTATUS_SAMESOURCEANDDEST);
+        }
 
         $this->imap_reopenFolder($folderImapid);
-
-        // TODO this should throw a StatusExceptions on errors like SYNC_MOVEITEMSSTATUS_SAMESOURCEANDDEST,SYNC_MOVEITEMSSTATUS_INVALIDSOURCEID,SYNC_MOVEITEMSSTATUS_CANNOTMOVE
 
         // read message flags
         $overview = @imap_fetch_overview ( $this->mbox , $id, FT_UID);
@@ -1588,7 +1590,7 @@ class BackendIMAP extends BackendDiff implements ISearchProvider {
             // open new folder
             $stat = $this->imap_reopenFolder($newfolderImapid);
             if (! $s1)
-                throw new StatusException(sprintf("BackendIMAP->MoveMessage('%s','%s','%s'): Error, openeing the destination folder: %s", $folderid, $id, $newfolderid, imap_last_error()), SYNC_MOVEITEMSSTATUS_CANNOTMOVE);
+                throw new StatusException(sprintf("BackendIMAP->MoveMessage('%s','%s','%s'): Error, opening the destination folder: %s", $folderid, $id, $newfolderid, imap_last_error()), SYNC_MOVEITEMSSTATUS_CANNOTMOVE);
 
 
             // remove all flags
