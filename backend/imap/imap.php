@@ -174,6 +174,10 @@ class BackendIMAP extends BackendDiff implements ISearchProvider {
         if (isset($sm->source->folderid)) {
             $parent = $this->getImapIdFromFolderId($sm->source->folderid);
         }
+        
+        // by splitting the message in several lines we can easily grep later
+        foreach(preg_split("/((\r)?\n)/", $sm->mime) as $rfc822line)
+            ZLog::Write(LOGLEVEL_WBXML, "RFC822: ". $rfc822line);        
 
         $mobj = new Mail_mimeDecode($sm->mime);
         $message = $mobj->decode(array('decode_headers' => false, 'decode_bodies' => true, 'include_bodies' => true, 'charset' => 'utf-8'));
