@@ -1035,9 +1035,7 @@ class Mail_mimeDecode
      * @access private
      */
     function _fromCharset($charset, $input) {
-        //if($charset == '' || (strtolower($charset) == $this->_charset))
-        //We must reconvert text, because it can be stored with other charset in the server (http://z-push.sourceforge.net/phpbb/viewtopic.php?f=7&t=2283&start=10)
-        if($charset == '')
+        if($charset == '' || (strtolower($charset) == $this->_charset))
             return $input;
 
         // all ISO-8859-1 are converted as if they were Windows-1252 - see Mantis #456
