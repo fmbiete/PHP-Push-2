@@ -135,7 +135,7 @@ class BackendCardDAV extends BackendDiff implements ISearchProvider {
 		$folder->serverid = $id;
 		$folder->displayname = sprintf("%s AddressBook", Request::GetAuthUser());
 		$folder->parentid = "0";
-		$folder->type = SYNC_FOLDER_TYPE_USER_CONTACT;
+		$folder->type = SYNC_FOLDER_TYPE_CONTACT; //Only this type will be synchronized by Android, Windows Phone
 
 		return $folder;
 	}
