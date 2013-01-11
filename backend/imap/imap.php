@@ -1955,7 +1955,6 @@ class BackendIMAP extends BackendDiff implements ISearchProvider {
      */
     protected function getBody($message) {
         $body = "";
-        $htmlbody = "";
 
         $this->getBodyRecursive($message, "plain", $body);
 
