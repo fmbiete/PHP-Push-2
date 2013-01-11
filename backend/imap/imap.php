@@ -1237,13 +1237,13 @@ class BackendIMAP extends BackendDiff implements ISearchProvider {
                         $output->displayto = $name;
 
                     if($name == "" || $name == $address)
-                        $fulladdr = w2u($address);
+                        $fulladdr = $address;
                     else {
                         if (substr($name, 0, 1) != '"' && substr($name, -1) != '"') {
-                            $fulladdr = "\"" . w2u($name) ."\" <" . w2u($address) . ">";
+                            $fulladdr = "\"" . $name ."\" <" . $address . ">";
                         }
                         else {
-                            $fulladdr = w2u($name) ." <" . w2u($address) . ">";
+                            $fulladdr = $name ." <" . $address . ">";
                         }
                     }
 
