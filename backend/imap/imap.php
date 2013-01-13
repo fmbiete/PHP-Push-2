@@ -1231,7 +1231,7 @@ class BackendIMAP extends BackendDiff implements ISearchProvider {
             foreach(array("to" => $toaddr, "cc" => $ccaddr, "reply_to" => $replytoaddr) as $type => $addrlist) {
                 if ($addrlist === false) {
                     //If we couldn't parse the addresslist we put the raw header (decoded)
-                    $output->$type = $message->headers[$type];
+                    $output->$type[] = $message->headers[$type];
                 }
                 else {
                     foreach($addrlist as $addr) {
