@@ -513,12 +513,12 @@ class BackendIMAP extends BackendDiff implements ISearchProvider {
         ZLog::Write(LOGLEVEL_DEBUG, "BackendIMAP->SendMail(): parsed message: ". print_r($message,1));
         ZLog::Write(LOGLEVEL_DEBUG, "BackendIMAP->SendMail(): headers: $headers");
         /* BEGIN fmbiete's contribution r1528, ZP-320 */
-        if (isset($message->headers["subject"])) {
+        if (isset($message->headers["subject"]) && strlen($message->headers["subject"]) > 0) {
             ZLog::Write(LOGLEVEL_DEBUG, "BackendIMAP->SendMail(): subject: {$message->headers["subject"]}");
         }
         else {
             ZLog::Write(LOGLEVEL_DEBUG, "BackendIMAP->SendMail(): subject: no subject set. Set to empty.");
-            $message->headers["subject"] = ""; // added by mku ZP-330
+            $message->headers["subject"] = " "; // added by mku ZP-330
         }
         /* END fmbiete's contribution r1528, ZP-320 */
         ZLog::Write(LOGLEVEL_DEBUG, "BackendIMAP->SendMail(): body: $body");
