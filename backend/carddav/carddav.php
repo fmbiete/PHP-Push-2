@@ -303,7 +303,7 @@ class BackendCardDAV extends BackendDiff implements ISearchProvider {
 	 */
 	public function ChangeMessage($folderid, $id, $message, $contentParameters) {
 		ZLog::Write(LOGLEVEL_DEBUG, sprintf("BackendCardDAV->ChangeMessage('%s','%s')", $folderid,  $id));
-		if (defined(CARDDAV_READONLY) && CARDDAV_READONLY)
+		if (defined('CARDDAV_READONLY') && CARDDAV_READONLY)
 		{
 			return false;
 		}
@@ -365,7 +365,7 @@ class BackendCardDAV extends BackendDiff implements ISearchProvider {
 	 */
 	public function DeleteMessage($folderid, $id, $contentParameters) {
 		ZLog::Write(LOGLEVEL_DEBUG, sprintf("BackendCardDAV->DeleteMessage('%s','%s')", $folderid,  $id));
-		if (defined(CARDDAV_READONLY) && CARDDAV_READONLY)
+		if (defined('CARDDAV_READONLY') && CARDDAV_READONLY)
 		{
 			return false;
 		}
