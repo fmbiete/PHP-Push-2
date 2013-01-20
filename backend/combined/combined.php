@@ -387,7 +387,7 @@ class BackendCombined extends Backend implements ISearchProvider {
         $backend = $this->GetBackend($folderid);
         if($backend === false)
             return false;
-        return $backend->EmptyFolder($requestid, $this->GetBackendFolder($folderid), $error);
+        return $backend->EmptyFolder($this->GetBackendFolder($folderid), $includeSubfolders);
     }
 
     /**
