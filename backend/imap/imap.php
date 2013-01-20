@@ -69,9 +69,8 @@ class BackendIMAP extends BackendDiff implements ISearchProvider {
         $this->sentID = false;
         $this->mboxFolder = "";
 
-        if (!function_exists("imap_open")) {
+        if (!function_exists("imap_open"))
             throw new FatalException("BackendIMAP(): php-imap module is not installed", 0, null, LOGLEVEL_FATAL);
-        }
     }
 
     /**----------------------------------------------------------------------------------------------------------
@@ -177,7 +176,7 @@ class BackendIMAP extends BackendDiff implements ISearchProvider {
         
         // by splitting the message in several lines we can easily grep later
         foreach(preg_split("/((\r)?\n)/", $sm->mime) as $rfc822line)
-            ZLog::Write(LOGLEVEL_WBXML, "RFC822: ". $rfc822line);        
+            ZLog::Write(LOGLEVEL_WBXML, "RFC822: ". $rfc822line);
 
         $mobj = new Mail_mimeDecode($sm->mime);
         $message = $mobj->decode(array('decode_headers' => false, 'decode_bodies' => true, 'include_bodies' => true, 'charset' => 'utf-8'));
