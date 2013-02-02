@@ -42,6 +42,6 @@
 ************************************************/
 
 
-define("ZPUSH_VERSION", "SVN-trunk-r1654");
+define("ZPUSH_VERSION", "SVN-trunk-r1682");
 
 ?>

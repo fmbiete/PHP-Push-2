@@ -865,6 +865,24 @@ class Utils {
     }
 
     /**
+     * Returns AS-style LastVerbExecuted value from the server value.
+     *
+     * @param int $verb
+     *
+     * @access public
+     * @return int
+     */
+    public static function GetLastVerbExecuted($verb) {
+        switch ($verb) {
+            case NOTEIVERB_REPLYTOSENDER:   return AS_REPLYTOSENDER;
+            case NOTEIVERB_REPLYTOALL:      return AS_REPLYTOALL;
+            case NOTEIVERB_FORWARD:         return AS_FORWARD;
+        }
+
+        return 0;
+    }
+
+    /**
      * Fix Address Name. We convert the =2C into coma char
      *
      * @param string $text
