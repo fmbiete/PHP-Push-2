@@ -2022,14 +2022,20 @@ class BackendIMAP extends BackendDiff implements ISearchProvider {
      * @return
      */
     protected function imap_reopenFolder($folderid, $force = false) {
+        // if the stream is not alive, we open it again
+        if (!@imap_ping($this->mbox)) {
+            $this->mbox = @imap_open($this->server , $username, $password, OP_HALFOPEN);
+            $this->mboxFolder = "";
+        }
+
         // to see changes, the folder has to be reopened!
-           if ($this->mboxFolder != $folderid || $force) {
-               $s = @imap_reopen($this->mbox, $this->server . $folderid);
-               // TODO throw status exception
-               if (!$s) {
+        if ($this->mboxFolder != $folderid || $force) {
+            $s = @imap_reopen($this->mbox, $this->server . $folderid);
+            // TODO throw status exception
+            if (!$s) {
                 ZLog::Write(LOGLEVEL_WARN, sprintf("BackendIMAP->imap_reopenFolder('%s'): failed to change folder: %s",$folderid, implode(", ", imap_errors())));
                 return false;
-               }
+            }
             $this->mboxFolder = $folderid;
         }
     }
