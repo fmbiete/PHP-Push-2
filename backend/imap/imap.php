@@ -58,6 +58,7 @@ class BackendIMAP extends BackendDiff implements ISearchProvider {
     protected $mbox;
     protected $mboxFolder;
     protected $username;
+    private $password;
     protected $domain;
     protected $serverdelimiter;
     protected $sinkfolders;
@@ -111,6 +112,7 @@ class BackendIMAP extends BackendDiff implements ISearchProvider {
         if ($this->mbox) {
             ZLog::Write(LOGLEVEL_DEBUG, sprintf("BackendIMAP->Logon(): User '%s' is authenticated on IMAP",$username));
             $this->username = $username;
+            $this->password = $password;
             $this->domain = $domain;
             // set serverdelimiter
             $this->serverdelimiter = $this->getServerDelimiter();
@@ -2024,7 +2026,7 @@ class BackendIMAP extends BackendDiff implements ISearchProvider {
     protected function imap_reopenFolder($folderid, $force = false) {
         // if the stream is not alive, we open it again
         if (!@imap_ping($this->mbox)) {
-            $this->mbox = @imap_open($this->server , $username, $password, OP_HALFOPEN);
+            $this->mbox = @imap_open($this->server , $this->username, $this->password, OP_HALFOPEN);
             $this->mboxFolder = "";
         }
 
