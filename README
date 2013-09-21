@@ -1,13 +1,3 @@
-PHP-Push 2 is a fork of z-push 2 with combined backends:
+This was a Z-Push fork with better IMAP support.
 
-Mail - IMAP
-Requirements: IMAP Server
-
-Calendar - CalDAV
-Requirements: libawl-php
-
-Contacts - LDAP
-Requirements: LDAP Server
-
-Contacts - CardDAV
-Requirements: libawl-php
+This repo has been moved to https://github.com/fmbiete/Z-Push-contrib
